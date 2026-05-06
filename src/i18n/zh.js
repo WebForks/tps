@@ -14,7 +14,7 @@ export default {
     library: '模型库',
     library_short: '模型库',
     solver: '配置推荐',
-    solver_short: '推荐',
+    solver_short: '配置',
   },
   notice: {
     theoretical_value: '💡 计算结果为理论值，仅供参考',
@@ -95,7 +95,7 @@ export default {
     search_placeholder: '搜索显卡型号...',
     select_placeholder: '选择显卡',
     no_result: '无匹配显卡',
-    detect_btn: '检测本机',
+    detect_btn: '自动检测本机显卡',
     detecting: '检测中...',
     detect_matched: '已自动匹配本机显卡',
     auto_no_match: '未能匹配本机显卡，请手动选择',
@@ -335,6 +335,8 @@ export default {
     mlx: 'MLX (Apple)',
     llamacpp_metal: 'llama.cpp (Metal)',
     llamacpp: 'llama.cpp',
+    llamacpp_metal_note: 'LM Studio (Mac), Ollama (Mac) 等工具在 Apple Silicon 上使用此框架',
+    llamacpp_note: 'LM Studio, Ollama, Jan 等工具基于 llama.cpp，请选择此项',
   },
   ranking: {
     title: '速度排行',
@@ -380,7 +382,7 @@ export default {
   solver: {
     title: '配置推荐',
     subtitle: '针对指定模型，在 GPU × 量化 × 框架的组合空间里自动枚举，输出满足约束的 Pareto 最优方案',
-    reverse_link: '想从硬件出发看可跑模型？去适配排行',
+    reverse_link: '想从硬件出发看可跑模型？去速度排行',
     upgrade_mode: '升级模式',
     upgrade_current_config: '当前配置：{gpu} × {count} / {quant} / 目标速度 {target} tok/s',
     upgrade_button: '我想更快',

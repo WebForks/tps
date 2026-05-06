@@ -95,7 +95,7 @@ export default {
     search_placeholder: 'Search GPU model...',
     select_placeholder: 'Select GPU',
     no_result: 'No matching GPU',
-    detect_btn: 'Detect GPU',
+    detect_btn: 'Auto-Detect My GPU',
     detecting: 'Detecting...',
     detect_matched: 'GPU auto-detected',
     auto_no_match: 'Could not detect your GPU, please select manually',
@@ -335,6 +335,8 @@ export default {
     mlx: 'MLX (Apple)',
     llamacpp_metal: 'llama.cpp (Metal)',
     llamacpp: 'llama.cpp',
+    llamacpp_metal_note: 'LM Studio (Mac), Ollama (Mac), and similar tools use this framework on Apple Silicon',
+    llamacpp_note: 'LM Studio, Ollama, Jan, and similar tools are based on llama.cpp — select this option',
   },
   ranking: {
     title: 'Ranking',

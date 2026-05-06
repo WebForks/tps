@@ -112,6 +112,7 @@ function frameworkSupportsGpu(framework, gpu) {
  * @param {object} opts.model           - 模型对象
  * @param {number} opts.maxGpuCount     - 最大 GPU 数量（1/2/4/8）
  * @param {string|null} opts.vendorFilter - GPU 厂商过滤（null = 全部）
+ * @param {boolean} opts.excludeDatacenterGpu - 是否排除数据中心卡（默认 false）
  * @param {string} opts.quantFloor      - 量化质量下限 id
  * @param {number|null} opts.minDecodeSpeed - 最低 decode 速度（tok/s）
  * @param {number|null} opts.maxTtft    - 最大 TTFT（ms）
@@ -119,15 +120,17 @@ function frameworkSupportsGpu(framework, gpu) {
  * @param {number} opts.batch           - 并发数
  * @param {number} opts.promptLen       - Prompt 长度
  * @param {number} opts.outputLen       - 输出长度
+ * @param {boolean} opts.disableYield   - 是否禁用分批让出主线程（默认 false）
  * @param {function} opts.onProgress    - 进度回调 (done, total)
  * @param {function} opts.shouldCancel  - 取消检查函数
  * @returns {Promise<{ results: SolverResult[], cancelled: boolean }>}
  */
 export async function solveForModel(opts) {
   const {
-    model, maxGpuCount = 4, vendorFilter = null,
+    model, maxGpuCount = 4, vendorFilter = null, excludeDatacenterGpu = false,
     quantFloor = 'none', minDecodeSpeed = null, maxTtft = null,
     ctx = 4096, batch = 1, promptLen = 512, outputLen = 256,
+    disableYield = false,
     onProgress,
     shouldCancel,
   } = opts
@@ -143,7 +146,10 @@ export async function solveForModel(opts) {
 
   // 过滤 GPU 列表
   const gpus = GPU_LIST.filter(g => {
-    if (vendorFilter && vendorFilter !== 'all') return g.vendor === vendorFilter
+    if (vendorFilter && vendorFilter !== 'all') {
+      if (g.vendor !== vendorFilter) return false
+    }
+    if (excludeDatacenterGpu && g.tier === 'datacenter') return false
     return true
   })
 
@@ -179,9 +185,6 @@ export async function solveForModel(opts) {
         const epOptions = getEpOptions(model, gpuCount)
 
         for (const quant of quants) {
-          // 提前剪枝：极小模型（< 1B）只保留 BF16 和 INT8（量化收益微乎其微）
-          if (model.params < 1 && !['bf16', 'int8'].includes(quant.id)) continue
-
           // EP 循环提前到 quant 同层，让剪枝能感知 EP 分片
           for (const epCount of epOptions) {
             // 第二层剪枝：计算 EP 感知的每卡权重
@@ -266,8 +269,10 @@ export async function solveForModel(opts) {
     }
 
     onProgress?.(Math.min(i + BATCH_SIZE, total), total)
-    // 让出主线程
-    await yieldToMain()
+    // 让出主线程（某些环境 requestIdleCallback 可能导致卡住，可按需禁用）
+    if (!disableYield) {
+      await yieldToMain()
+    }
   }
 
   return { results: computePareto(pruneEquivalentResults(results)), cancelled: false }
@@ -280,7 +285,7 @@ export async function solveForModel(opts) {
  */
 function generateInsight(row) {
   const lines = []
-  
+
   // 显存余量检查
   if (row.vramPct > 85) {
     lines.push('显存余量不足 15%，不建议增加上下文')
@@ -288,7 +293,7 @@ function generateInsight(row) {
   if (row.vramPct < 30) {
     lines.push('显存充裕，可大幅增加上下文或 batch')
   }
-  
+
   // 多卡效率检查
   if (row.gpuCount > 1 && row.tpEfficiency != null) {
     if (row.tpEfficiency < 0.75) {
@@ -297,17 +302,17 @@ function generateInsight(row) {
       lines.push('多卡扩展效率优秀')
     }
   }
-  
+
   // 量化质量检查
   if (row.quant?.quality === 'ok' || row.quant?.quality === 'poor') {
     lines.push('当前量化对质量有明显影响')
   }
-  
+
   // 瓶颈检查
   if (row.bottleneck === 'compute') {
     lines.push('算力瓶颈，增加 GPU 数量收益有限')
   }
-  
+
   return lines.length > 0 ? lines.join('；') : null
 }
 
@@ -319,6 +324,14 @@ function generateInsight(row) {
  */
 function computePareto(results) {
   if (results.length === 0) return []
+
+  // 大结果集时跳过全量 O(n^2) Pareto，避免长时间卡在 100% 进度。
+  // 保留按速度排序，并将前若干条标记为 Pareto 候选，确保界面可快速返回可用结果。
+  if (results.length > 2000) {
+    const sorted = [...results].sort((a, b) => b.decodeSpeed - a.decodeSpeed)
+    const paretoCap = Math.min(200, sorted.length)
+    return sorted.map((r, i) => ({ ...r, isPareto: i < paretoCap }))
+  }
 
   // 标记每个方案是否被支配
   const dominated = new Array(results.length).fill(false)
@@ -351,10 +364,19 @@ function computePareto(results) {
  */
 function yieldToMain() {
   return new Promise(resolve => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      resolve()
+    }
+
     if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(resolve, { timeout: 50 })
+      // Some environments may throttle/skip idle callbacks; timer ensures progress.
+      requestIdleCallback(finish, { timeout: 50 })
+      setTimeout(finish, 60)
     } else {
-      setTimeout(resolve, 0)
+      setTimeout(finish, 0)
     }
   })
 }
@@ -385,15 +407,15 @@ export async function solveUpgrade(opts) {
 
   const upgradePaths = []
   const frameworks = FRAMEWORK_MAP.filter(f => f.id !== 'theory')
-  
+
   // 策略 1: 增加同型号 GPU（2x, 4x, 8x）
   for (const newCount of [currentGpuCount * 2, currentGpuCount * 4, currentGpuCount * 8]) {
     if (newCount > 8) continue
     const interconnect = autoInterconnect(currentGpu, newCount)
-    
+
     for (const framework of frameworks) {
       if (!frameworkSupportsGpu(framework, currentGpu)) continue
-      
+
       try {
         const r = calcAll({
           gpu: currentGpu,
@@ -443,10 +465,10 @@ export async function solveUpgrade(opts) {
   const betterQuants = QUANT_MAP.filter(q => q.bytes > currentQuant.bytes)
   for (const quant of betterQuants) {
     const interconnect = autoInterconnect(currentGpu, currentGpuCount)
-    
+
     for (const framework of frameworks) {
       if (!frameworkSupportsGpu(framework, currentGpu)) continue
-      
+
       try {
         const r = calcAll({
           gpu: currentGpu,
@@ -493,18 +515,18 @@ export async function solveUpgrade(opts) {
   }
 
   // 策略 3: 换更大显存的同厂商 GPU（单卡）
-  const sameVendorGpus = GPU_LIST.filter(g => 
-    g.vendor === currentGpu.vendor && 
+  const sameVendorGpus = GPU_LIST.filter(g =>
+    g.vendor === currentGpu.vendor &&
     g.vram > currentGpu.vram &&
     g.id !== currentGpu.id
   ).sort((a, b) => a.vram - b.vram) // 按显存从小到大排序
 
   for (const newGpu of sameVendorGpus) {
     const interconnect = autoInterconnect(newGpu, 1)
-    
+
     for (const framework of frameworks) {
       if (!frameworkSupportsGpu(framework, newGpu)) continue
-      
+
       try {
         const r = calcAll({
           gpu: newGpu,

@@ -49,8 +49,9 @@ const modelA = ref(ALL_MODELS.find(m => m.id === _p.model) ?? ALL_MODELS.find(m 
 const maxGpuCount = ref(_p.maxg ? Math.max(1, Number(_p.maxg)) : 4)
 const vendorFilter = ref(['all', 'nvidia', 'amd', 'apple', 'intel', 'domestic'].includes(_p.vendor) ? _p.vendor : 'all')
 const quantFloor = ref(QUANT_FLOOR_OPTIONS.some(q => q.id === _p.qf) ? _p.qf : 'none')
-const minDecodeSpeedA = ref(_p.minds ? String(_p.minds) : '')
-const maxTtft = ref(_p.mttft ? String(_p.mttft) : '')
+const excludeDatacenterGpu = ref(_p.excl_dc === '1')
+const minDecodeSpeedA = ref(_p.minds && _p.minds !== 'none' ? Number(_p.minds) : '')
+const maxTtft = ref(_p.mttft && _p.mttft !== 'none' ? Number(_p.mttft) : '')
 
 // ── 共用参数 ──────────────────────────────────────────
 const ctx = ref(_p.ctx ? Math.max(512, Number(_p.ctx)) : 4096)
@@ -89,6 +90,8 @@ const visibleNonParetoResults = computed(() => nonParetoResults.value.slice(0, v
 async function runSolver() {
   if (solving.value) return
   const runToken = { cancelled: false }
+  const HARD_TIMEOUT_MS = 4000
+
   activeRunToken.value = runToken
   solving.value = true
   progress.value = 0
@@ -110,42 +113,86 @@ async function runSolver() {
       },
       shouldCancel: () => runToken.cancelled,
     }
-    
-    let outcome
+
+    let outcome = null
+
     if (isUpgradeMode.value && currentGpu.value && currentQuant.value) {
-      // 升级模式：枚举最小改动方案
-      outcome = await solveUpgrade({
+      const upgradeParams = {
         currentGpu: currentGpu.value,
         currentGpuCount: currentGpuCount.value,
         currentQuant: currentQuant.value,
         model: modelA.value,
         targetSpeed: targetSpeed.value,
-        ...commonParams,
-      })
+      }
+
+      try {
+        outcome = await Promise.race([
+          solveUpgrade({ ...upgradeParams, ...commonParams }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('solver-timeout')), HARD_TIMEOUT_MS)),
+        ])
+      } catch {
+        outcome = await solveUpgrade({ ...upgradeParams, shouldCancel: () => runToken.cancelled })
+      }
+
+      // 兜底：若首轮意外返回空结果，进行一次无进度回调的重算
+      if (!outcome?.cancelled && (outcome?.results?.length ?? 0) === 0) {
+        const retry = await solveUpgrade(upgradeParams)
+        if (!retry?.cancelled && (retry?.results?.length ?? 0) > 0) {
+          outcome = retry
+        }
+      }
     } else {
-      // 标准模式：全量搜索
-      outcome = await solveForModel({
+      const solverParams = {
         model: modelA.value,
         maxGpuCount: maxGpuCount.value,
         vendorFilter: vendorFilter.value,
+        excludeDatacenterGpu: excludeDatacenterGpu.value,
         quantFloor: quantFloor.value,
         minDecodeSpeed: minDecodeSpeedA.value ? Number(minDecodeSpeedA.value) : null,
         maxTtft: maxTtft.value ? Number(maxTtft.value) : null,
-        ...commonParams,
-      })
+        disableYield: true,
+      }
+
+      try {
+        outcome = await Promise.race([
+          solveForModel({ ...solverParams, ...commonParams }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('solver-timeout')), HARD_TIMEOUT_MS)),
+        ])
+      } catch {
+        outcome = await solveForModel({ ...solverParams, shouldCancel: () => runToken.cancelled })
+      }
+
+      // 兜底：若首轮意外返回空结果，进行一次无进度回调的重算
+      if (!outcome?.cancelled && (outcome?.results?.length ?? 0) === 0) {
+        const retry = await solveForModel(solverParams)
+        if (!retry?.cancelled && (retry?.results?.length ?? 0) > 0) {
+          outcome = retry
+        }
+      }
     }
-    
-    if (activeRunToken.value !== runToken) return
-    if (outcome.cancelled) {
+
+    if (activeRunToken.value !== runToken) {
+      if ((outcome?.results?.length ?? 0) > 0 && results.value.length === 0) {
+        results.value = outcome.results
+      }
+      return
+    }
+    if (!outcome || outcome.cancelled) {
       wasCancelled.value = true
       return
     }
     results.value = outcome.results
+  } catch (err) {
+    console.error('[solver] runSolver failed', err)
+    if (activeRunToken.value === runToken) {
+      results.value = []
+      wasCancelled.value = false
+    }
   } finally {
     if (activeRunToken.value === runToken) {
-      solving.value = false
       activeRunToken.value = null
     }
+    solving.value = false
   }
 }
 
@@ -201,19 +248,20 @@ const SORT_OPTIONS = computed(() => [
 ])
 
 watch(
-  [modelA, maxGpuCount, vendorFilter, quantFloor, minDecodeSpeedA, maxTtft, ctx, batch, promptLen, outputLen],
-  ([model, maxg, vendor, qf, minds, mttft, ctxValue, batchValue, promptValue, outputValue]) => {
+  [modelA, maxGpuCount, vendorFilter, excludeDatacenterGpu, quantFloor, minDecodeSpeedA, maxTtft, ctx, batch, promptLen, outputLen],
+  ([model, maxg, vendor, excl_dc, qf, minds, mttft, ctxValue, batchValue, promptValue, outputValue]) => {
     const query = {}
     if (model?.id) query.model = model.id
     if (maxg !== 4) query.maxg = String(maxg)
     if (vendor !== 'all') query.vendor = vendor
+    if (excl_dc) query.excl_dc = '1'
     if (qf !== 'none') query.qf = qf
-    if (minds !== '') query.minds = String(minds)
-    if (mttft !== '') query.mttft = String(mttft)
-    if (ctxValue !== 4096) query.ctx = String(ctxValue)
-    if (batchValue !== 1) query.b = String(batchValue)
-    if (promptValue !== 512) query.pl = String(promptValue)
-    if (outputValue !== 256) query.ol = String(outputValue)
+    if (minds !== '' && typeof minds === 'number' && !Number.isNaN(minds) && minds > 0) query.minds = String(minds)
+    if (mttft !== '' && typeof mttft === 'number' && !Number.isNaN(mttft) && mttft > 0) query.mttft = String(mttft)
+    if (ctxValue !== 4096 && !Number.isNaN(ctxValue)) query.ctx = String(ctxValue)
+    if (batchValue !== 1 && !Number.isNaN(batchValue)) query.b = String(batchValue)
+    if (promptValue !== 512 && !Number.isNaN(promptValue)) query.pl = String(promptValue)
+    if (outputValue !== 256 && !Number.isNaN(outputValue)) query.ol = String(outputValue)
     router.replace({ query })
   },
   { immediate: true }
@@ -239,11 +287,11 @@ onMounted(() => {
         </div>
         <p v-if="!isUpgradeMode" class="mt-1 text-sm text-gray-500">{{ t('solver.subtitle') }}</p>
         <p v-else class="mt-1 text-sm text-gray-600">
-          {{ t('solver.upgrade_current_config', { 
-            gpu: currentGpu?.name || '—', 
-            count: currentGpuCount, 
-            quant: currentQuant?.label || '—', 
-            target: targetSpeed 
+          {{ t('solver.upgrade_current_config', {
+            gpu: currentGpu?.name || '—',
+            count: currentGpuCount,
+            quant: currentQuant?.label || '—',
+            target: targetSpeed
           }) }}
         </p>
         <RouterLink to="/ranking" class="inline-flex mt-3 text-sm font-medium text-emerald-700 hover:text-emerald-800">
@@ -293,6 +341,28 @@ onMounted(() => {
               </div>
             </div>
 
+            <!-- GPU 层级过滤 -->
+            <div>
+              <label class="block text-xs text-gray-500 mb-1.5">{{ locale === 'zh' ? '显卡类型' : 'GPU Type' }}</label>
+              <div class="flex gap-1.5">
+                <button
+                  @click="excludeDatacenterGpu = false"
+                  class="flex-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors"
+                  :class="!excludeDatacenterGpu
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'"
+                >{{ locale === 'zh' ? '全部' : 'All' }}</button>
+                <button
+                  @click="excludeDatacenterGpu = true"
+                  class="flex-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors"
+                  :class="excludeDatacenterGpu
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'"
+                >{{ locale === 'zh' ? '消费级' : 'Consumer' }}</button>
+              </div>
+              <p class="text-xs text-gray-400 mt-1.5">{{ locale === 'zh' ? '消费级：排除数据中心卡(H100/A100等)' : 'Consumer: Exclude datacenter GPUs (H100/A100/etc)' }}</p>
+            </div>
+
             <!-- 量化质量下限 -->
             <div>
               <label class="block text-xs text-gray-500 mb-1.5">{{ t('solver.quant_floor') }}</label>
@@ -315,7 +385,7 @@ onMounted(() => {
                 <span class="text-gray-400 font-normal">{{ t('solver.optional') }}</span>
               </label>
               <div class="relative">
-                <input v-model="minDecodeSpeedA" type="number" min="0" placeholder="—"
+                <input v-model.number="minDecodeSpeedA" type="number" min="0" placeholder="—"
                   class="w-full px-3 py-1.5 pr-14 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">tok/s</span>
               </div>
@@ -328,7 +398,7 @@ onMounted(() => {
                 <span class="text-gray-400 font-normal">{{ t('solver.optional') }}</span>
               </label>
               <div class="relative">
-                <input v-model="maxTtft" type="number" min="0" placeholder="—"
+                <input v-model.number="maxTtft" type="number" min="0" placeholder="—"
                   class="w-full px-3 py-1.5 pr-10 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">ms</span>
               </div>

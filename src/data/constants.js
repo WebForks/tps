@@ -53,6 +53,7 @@ export const FRAMEWORK_MAP = [
   {
     id: 'llamacpp_metal',
     labelKey: 'framework.llamacpp_metal',
+    noteKey: 'framework.llamacpp_metal_note',
     decode: 0.62, prefill: 0.50,
     decodeMin: 0.52, decodeMax: 0.70,
     prefillMin: 0.42, prefillMax: 0.58,
@@ -74,6 +75,7 @@ export const FRAMEWORK_MAP = [
   {
     id: 'llamacpp',
     labelKey: 'framework.llamacpp',
+    noteKey: 'framework.llamacpp_note',
     decode: 0.55, prefill: 0.35,
     decodeMin: 0.48, decodeMax: 0.65,
     prefillMin: 0.30, prefillMax: 0.40,

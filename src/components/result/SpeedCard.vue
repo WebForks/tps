@@ -237,7 +237,7 @@ async function copyCmd() {
           :key="f.id"
           @click="!props.readonly && f.available && (framework = f)"
           :disabled="!f.available || props.readonly"
-          :title="!f.available ? t('run.framework_unavailable', { vendor: gpuVendor }) : f.recommended ? t('run.framework_recommended') : ''"
+          :title="!f.available ? t('run.framework_unavailable', { vendor: gpuVendor }) : f.recommended ? t('run.framework_recommended') : f.noteKey ? t(f.noteKey) : ''"
           :class="[
             'flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-xs border transition-colors relative',
             !f.available
@@ -256,6 +256,10 @@ async function copyCmd() {
           </template>
         </button>
       </div>
+      <!-- llama.cpp 提示信息 -->
+      <p v-if="framework.id === 'llamacpp' || framework.id === 'llamacpp_metal'" class="mt-2 text-xs text-blue-600 bg-blue-50 rounded px-2 py-1.5 border border-blue-200">
+        💡 {{ framework.noteKey ? t(framework.noteKey) : 'LM Studio, Ollama, Jan 等工具基于 llama.cpp，效率系数相同' }}
+      </p>
     </div>
 
     <!-- 启动命令生成 -->
