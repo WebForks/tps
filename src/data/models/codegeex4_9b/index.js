@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat', 'code'],
+
   links: {
     hf: 'https://huggingface.co/THUDM/codegeex4-all-9b',
     ms: 'https://modelscope.cn/models/ZhipuAI/codegeex4-all-9b',

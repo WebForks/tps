@@ -11,6 +11,8 @@ export default {
   head_dim: 256,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['chat', 'code'],
+
   links: {
     hf: 'https://huggingface.co/Salesforce/codegen25-7b-instruct',
   },

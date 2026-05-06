@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 4096,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/baichuan-inc/Baichuan2-13B-Chat',
     ms: 'https://modelscope.cn/models/baichuan-inc/Baichuan2-13B-Chat',

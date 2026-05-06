@@ -12,6 +12,8 @@ export default {
   head_dim: 64,
   hidden_size: 2560,
   max_ctx: 2048,
+  tags: ['chat'],
+
   links: {
     hf: 'https://huggingface.co/EleutherAI/pythia-2.8b',
   },

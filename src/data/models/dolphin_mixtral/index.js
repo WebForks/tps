@@ -16,6 +16,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 32768,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull dolphin-mixtral',
     hf: 'https://huggingface.co/cognitivecomputations/dolphin-2.6-mixtral-8x7b',

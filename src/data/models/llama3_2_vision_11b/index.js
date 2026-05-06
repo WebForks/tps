@@ -12,6 +12,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['vision'],
   // Vision encoder: ViT-H (cross-attention style), ~2.5B params
   // image_size=560, patch_size=14 → 40×40 + cls = 1601 patch tokens per image
   vision_encoder_params: 2.5,

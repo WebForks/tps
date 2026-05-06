@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/internlm/internlm2_5-20b-chat',
     ms: 'https://modelscope.cn/models/Shanghai_AI_Laboratory/internlm2_5-20b-chat',

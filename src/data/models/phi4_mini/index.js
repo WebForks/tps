@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 3072,
   max_ctx: 16384,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull phi4-mini',
     hf: 'https://huggingface.co/microsoft/Phi-4-mini-instruct',

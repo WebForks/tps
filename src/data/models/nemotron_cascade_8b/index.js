@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 3072,
   max_ctx: 65536,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull nemotron-cascade:8b',
     hf: 'https://huggingface.co/nvidia/Nemotron-Cascade-8B',

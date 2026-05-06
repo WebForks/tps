@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 16384,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull phind-codellama:34b',
     hf: 'https://huggingface.co/Phind/Phind-CodeLlama-34B-v2',

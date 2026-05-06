@@ -13,6 +13,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 32768,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull mixtral',
     hf: 'https://huggingface.co/mistralai/Mixtral-8x7B-v0.1',

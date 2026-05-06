@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull granite-code:8b',
     hf: 'https://huggingface.co/ibm-granite/granite-8b-code-instruct-128k',

@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 2048,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/mosaicml/mpt-7b-instruct',
     ms: 'https://modelscope.cn/models/AI-ModelScope/mpt-7b-instruct',

@@ -43,6 +43,8 @@ const customIsMoe = ref(false)
 
 const filteredModels = computed(() => {
   let list = ALL_MODELS
+  // Filter out legacy models
+  list = list.filter(m => m.status !== 'legacy')
   if (activeTab.value === 'dense') list = list.filter(m => m.type === 'dense')
   else if (activeTab.value === 'moe') list = list.filter(m => m.type === 'moe')
   if (searchQuery.value.trim()) {

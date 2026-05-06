@@ -16,6 +16,7 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/Moonshot',
   },

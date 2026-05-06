@@ -11,6 +11,7 @@ export default {
   head_dim: 64,
   hidden_size: 2048,
   max_ctx: 8192,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B',
     ms: 'https://modelscope.cn/models/HuggingFaceTB/SmolLM2-1.7B',

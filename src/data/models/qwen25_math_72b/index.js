@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 4096,
+  tags: ['chat', 'math', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen2.5-Math-72B',
     ms: 'https://modelscope.cn/models/Qwen/Qwen2.5-Math-72B',

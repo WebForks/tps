@@ -13,6 +13,7 @@ export default {
   head_dim: 128,
   hidden_size: 1024,
   max_ctx: 8192,
+  tags: ['chat'],
   vision_seq_tokens: 256,  // MobileNet 视觉编码器，每张图约 256 patch tokens
   links: {
     ollama: null,

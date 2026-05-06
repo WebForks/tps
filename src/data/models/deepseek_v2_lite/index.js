@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 32768,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite',
     ms: 'https://modelscope.cn/models/deepseek-ai/DeepSeek-V2-Lite',

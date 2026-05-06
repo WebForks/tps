@@ -12,6 +12,8 @@ export default {
   head_dim: 64,
   hidden_size: 2048,
   max_ctx: 4096,
+  tags: ['chat'],
+
   links: {
     hf: 'https://huggingface.co/stabilityai/stablelm-2-1_6b',
   },

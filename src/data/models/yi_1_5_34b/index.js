@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 7168,
   max_ctx: 4096,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/01-ai/Yi-1.5-34B',
     ms: 'https://modelscope.cn/models/01ai/Yi-1.5-34B',

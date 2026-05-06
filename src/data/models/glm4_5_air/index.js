@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
   released: '2025-07',
   links: {
     hf: 'https://huggingface.co/zai-org/GLM-4.5-Air',

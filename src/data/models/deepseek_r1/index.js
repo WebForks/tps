@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 7168,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual', 'reasoning'],
   released: '2025-01',
   links: {
     ollama: 'ollama pull deepseek-r1:671b',

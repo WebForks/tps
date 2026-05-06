@@ -14,6 +14,8 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
+
   links: {
     ollama: null,
     hf: 'https://huggingface.co/zai-org/GLM-4.7',

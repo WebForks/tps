@@ -11,6 +11,7 @@ export default {
   head_dim: 64,
   hidden_size: 2048,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/ibm-granite/granite-3.0-2b-instruct',
     ms: 'https://modelscope.cn/models/ibm-granite/granite-3.0-2b-instruct',

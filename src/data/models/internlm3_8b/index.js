@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
   links: {
     ollama: 'ollama pull internlm3',
     hf: 'https://huggingface.co/internlm/internlm3-8b-instruct',

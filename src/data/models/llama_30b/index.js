@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 6656,
   max_ctx: 2048,
+  tags: ['chat'],
+
   links: {
     hf: 'https://huggingface.co/huggyllama/llama-30b',
   },

@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 3584,
   max_ctx: 65536,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen2-57B-A14B-Instruct',
     ms: 'https://modelscope.cn/models/Qwen/Qwen2-57B-A14B-Instruct',

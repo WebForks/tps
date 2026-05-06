@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull mistral-nemo',
     hf: 'https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407',

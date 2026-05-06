@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 4096,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/wenge-research/yayi-13b',
     ms: 'https://modelscope.cn/models/wenge-research/yayi-13b',

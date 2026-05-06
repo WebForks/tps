@@ -9,6 +9,7 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
   links: {
     ollama: 'ollama pull qwen2:72b',
     hf: 'https://huggingface.co/Qwen/Qwen2-72B',

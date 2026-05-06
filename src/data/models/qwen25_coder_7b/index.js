@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 3584,
   max_ctx: 131072,
+  tags: ['chat', 'code', 'multilingual'],
+
   links: {
     ollama: 'ollama pull qwen2.5-coder:7b',
     hf: 'https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct',

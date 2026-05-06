@@ -12,6 +12,8 @@ export default {
   head_dim: 256,
   hidden_size: 3584,
   max_ctx: 8192,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull gemma2:7b',
     hf: 'https://huggingface.co/google/gemma-2-7b',

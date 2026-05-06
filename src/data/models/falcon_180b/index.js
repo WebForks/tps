@@ -9,6 +9,7 @@ export default {
   head_dim: 64,
   hidden_size: 14848,
   max_ctx: 4096,
+  tags: ['chat'],
   links: {
     ollama: null,
     hf: 'https://huggingface.co/tiiuae/falcon-180B',

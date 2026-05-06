@@ -21,6 +21,7 @@ export default {
   sliding_window: 1024,  // local attention window size (tokens)
   hidden_size: 2816,
   max_ctx: 262144,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull gemma4:26b',
     hf: 'https://huggingface.co/google/gemma-4-26b-it',

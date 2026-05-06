@@ -14,6 +14,7 @@ export default {
   head_dim: 128,
   hidden_size: 7168,
   max_ctx: 262144,
+  tags: ['chat', 'code', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct',
     ms: 'https://modelscope.cn/models/Qwen/Qwen3-Coder-480B-A35B-Instruct',

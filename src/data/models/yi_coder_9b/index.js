@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat', 'code', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/01-ai/Yi-Coder-9B',
     ms: 'https://modelscope.cn/models/01ai/Yi-Coder-9B',

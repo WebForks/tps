@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull samantha-mistral',
     hf: 'https://huggingface.co/cognitivecomputations/samantha-1.2-mistral-7b',

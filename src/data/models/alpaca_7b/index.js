@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 2048,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull alpaca',
     hf: 'https://huggingface.co/chavinlo/alpaca-native',

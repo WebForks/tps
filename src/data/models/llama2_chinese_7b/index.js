@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 4096,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/LinkSoul/Chinese-Llama-2-7b',
     ms: 'https://modelscope.cn/models/LinkSoul/Chinese-Llama-2-7b',

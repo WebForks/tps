@@ -16,6 +16,7 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 8192,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/xai-org/grok-1',
     ms: 'https://modelscope.cn/models/xai-org/grok-1',

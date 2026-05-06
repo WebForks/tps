@@ -9,6 +9,7 @@ export default {
   head_dim: 128,
   hidden_size: 16384,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     ollama: null,
     hf: 'https://huggingface.co/meta-llama/Meta-Llama-3.1-405B',

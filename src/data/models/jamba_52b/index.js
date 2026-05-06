@@ -17,6 +17,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 256000,
+  tags: ['chat'],
   links: {
     ollama: null,
     hf: 'https://huggingface.co/ai21labs/Jamba-v0.1',

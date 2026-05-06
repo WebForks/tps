@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 8192,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/IEITYuan/Yuan2-2B-hf',
     ms: 'https://modelscope.cn/models/IEITYuan/Yuan2-2B-hf',

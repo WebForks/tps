@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 4096,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull airoboros:70b',
     hf: 'https://huggingface.co/jondurbin/airoboros-l2-70b-3.1.2',

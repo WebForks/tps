@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 32768,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen1.5-72B-Chat',
     ms: 'https://modelscope.cn/models/Qwen/Qwen1.5-72B-Chat',

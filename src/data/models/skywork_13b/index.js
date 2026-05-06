@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 4096,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/Skywork/Skywork-13B-base',
     ms: 'https://modelscope.cn/models/skywork/Skywork-13B-base',

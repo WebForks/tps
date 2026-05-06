@@ -11,6 +11,8 @@ export default {
   head_dim: 256,
   hidden_size: 3072,
   max_ctx: 8192,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull codegemma:7b',
     hf: 'https://huggingface.co/google/codegemma-7b',

@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull llama3.1:70b',
     hf: 'https://huggingface.co/meta-llama/Meta-Llama-3.1-70B-Instruct',

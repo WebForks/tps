@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/CohereForAI/aya-expanse-8b',
     ms: 'https://modelscope.cn/models/AI-ModelScope/aya-expanse-8b',

@@ -13,6 +13,8 @@ export default {
   hidden_size: 4096,
   max_ctx: 131072,
   released: '2025-04',
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/zai-org/GLM-Z1-9B-0414',
     ms: 'https://modelscope.cn/models/ZhipuAI/glm-4-9b-chat',

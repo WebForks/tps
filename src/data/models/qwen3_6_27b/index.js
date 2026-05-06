@@ -15,6 +15,7 @@ export default {
                          // 这是一个有意为之的 hack，请勿改为 null（null 会走普通 KV 计算路径）
   hidden_size: 5120,
   max_ctx: 262144,
+  tags: ['chat', 'multilingual'],
   released: '2026-04',
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen3.6-27B',

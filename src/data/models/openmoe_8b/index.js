@@ -14,6 +14,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 4096,
+  tags: ['chat'],
+
   links: {
     ollama: null,
     hf: 'https://huggingface.co/OrionZheng/openmoe-8b',

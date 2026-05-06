@@ -16,6 +16,7 @@ export default {
   head_dim: 512,
   hidden_size: 7168,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
   links: {
     ollama: 'ollama pull kimi-k2',
     hf: 'https://huggingface.co/moonshotai/Kimi-K2-Instruct',

@@ -11,6 +11,8 @@ export default {
   head_dim: 64,
   hidden_size: 2560,
   max_ctx: 4096,
+  tags: ['chat', 'code'],
+
   links: {
     hf: 'https://huggingface.co/replit/replit-code-v1_5-3b',
   },

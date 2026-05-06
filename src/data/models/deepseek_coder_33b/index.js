@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 7168,
   max_ctx: 16384,
+  tags: ['chat', 'code', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/deepseek-ai/deepseek-coder-33b-instruct',
   },

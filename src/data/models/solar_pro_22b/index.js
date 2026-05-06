@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/upstage/solar-pro-preview-instruct',
     ms: 'https://modelscope.cn/models/upstage/solar-pro-preview-instruct',

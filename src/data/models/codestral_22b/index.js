@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 32768,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull codestral:22b',
     hf: 'https://huggingface.co/mistralai/Codestral-22B-v0.1',

@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 3584,
   max_ctx: 32768,
+  tags: ['multilingual', 'vision'],
+
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen2-VL-7B-Instruct',
     ms: 'https://modelscope.cn/models/qwen/Qwen2-VL-7B-Instruct',

@@ -15,6 +15,7 @@ export default {
   head_dim: 64,
   hidden_size: 3072,
   max_ctx: 200000,
+  tags: ['chat', 'multilingual'],
   released: '2026-04',
   links: {
     hf: 'https://huggingface.co/MiniMaxAI/MiniMax-M2.7',

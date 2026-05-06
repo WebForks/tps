@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 32768,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/vivo-ai/BlueLM-7B-Chat',
     ms: 'https://modelscope.cn/models/vivo-ai/BlueLM-7B-Chat',

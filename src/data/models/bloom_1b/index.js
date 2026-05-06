@@ -12,6 +12,8 @@ export default {
   head_dim: 64,
   hidden_size: 1536,
   max_ctx: 2048,
+  tags: ['chat'],
+
   links: {
     hf: 'https://huggingface.co/bigscience/bloom-1b1',
   },

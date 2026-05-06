@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 131072,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull ministral:14b',
     hf: 'https://huggingface.co/mistralai/Ministral-3-14B',

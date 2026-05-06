@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 2048,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/BAAI/Aquila-7B',
     ms: 'https://modelscope.cn/models/BAAI/Aquila-7B',

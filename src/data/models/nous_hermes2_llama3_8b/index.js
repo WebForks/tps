@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull nous-hermes2-llama3',
     hf: 'https://huggingface.co/NousResearch/Hermes-2-Pro-Llama-3-8B',

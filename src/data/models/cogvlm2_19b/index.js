@@ -12,6 +12,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['vision'],
   // Vision encoder: EVA-E ViT ~4.4B params, 35×35=1225 patch tokens per image
   vision_encoder_params: 4.4,
   vision_seq_tokens: 1225,

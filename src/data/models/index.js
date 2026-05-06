@@ -787,9 +787,15 @@ export const COMMUNITY_MODELS = [
   samantha_7b,
 ]
 
+// Models released before this date are considered legacy
+const LEGACY_CUTOFF = '2023-07'
+
 export const ALL_MODELS = [...new Map(
   [...DENSE_MODELS, ...MOE_MODELS, ...COMMUNITY_MODELS].map(m => [m.id, m])
-).values()].sort((a, b) => {
+).values()].map(m => ({
+  ...m,
+  status: m.status ?? (m.released < LEGACY_CUTOFF ? 'legacy' : 'active')
+})).sort((a, b) => {
   // Sort by released date descending (newest first)
   const [ay, am] = (a.released || '2000-01').split('-').map(Number)
   const [by, bm] = (b.released || '2000-01').split('-').map(Number)

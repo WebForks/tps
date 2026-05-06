@@ -15,6 +15,8 @@ export default {
   head_dim: 128,
   hidden_size: 1536,
   max_ctx: 32768,
+  tags: ['chat', 'code', 'multilingual'],
+
   links: {
     ollama: null,
     hf: 'https://huggingface.co/Qwen/qwen3-coder-next',

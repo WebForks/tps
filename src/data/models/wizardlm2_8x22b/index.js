@@ -16,6 +16,7 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 65536,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/microsoft/WizardLM-2-8x22B',
   },

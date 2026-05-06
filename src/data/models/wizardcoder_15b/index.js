@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 8192,
+  tags: ['chat', 'code'],
+
   links: {
     hf: 'https://huggingface.co/WizardLM/WizardCoder-15B-V1.0',
   },

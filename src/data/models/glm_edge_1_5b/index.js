@@ -12,6 +12,8 @@ export default {
   head_dim: 64,
   hidden_size: 1536,
   max_ctx: 32768,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/THUDM/glm-edge-1.5b-chat',
     ms: 'https://modelscope.cn/models/ZhipuAI/glm-edge-1.5b-chat',

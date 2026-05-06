@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['vision'],
+
   links: {
     hf: 'https://huggingface.co/mistralai/Pixtral-12B-2409',
   },

@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['chat'],
+
   links: {
     hf: 'https://huggingface.co/tiiuae/falcon-mamba-7b',
   },

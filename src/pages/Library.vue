@@ -14,6 +14,7 @@ const isZh = computed(() => locale.value === 'zh')
 const activeTab = ref('models')
 const modelSearch = ref('')
 const gpuSearch = ref('')
+const filterTag = ref('')  // Tag filter for models
 const hoveredModel = ref(null)
 const hoveredGpu = ref(null)
 const hoverPosition = ref({ x: 0, y: 0 })
@@ -44,8 +45,20 @@ const MODEL_FAMILIES = [
 ]
 
 const filteredModels = computed(() => {
+  let models = ALL_MODELS
+  
+  // Text search filter
   const q = modelSearch.value.trim().toLowerCase()
-  return q ? ALL_MODELS.filter(m => m.name.toLowerCase().includes(q)) : ALL_MODELS
+  if (q) {
+    models = models.filter(m => m.name.toLowerCase().includes(q))
+  }
+  
+  // Tag filter
+  if (filterTag.value) {
+    models = models.filter(m => m.tags?.includes(filterTag.value))
+  }
+  
+  return models
 })
 
 const modelGroups = computed(() => {
@@ -256,13 +269,67 @@ onMounted(() => {
 
       <!-- ── 模型 ── -->
       <template v-if="activeTab === 'models'">
-        <div class="mb-4">
+        <div class="mb-4 space-y-3">
           <input
             v-model="modelSearch"
             type="text"
             :placeholder="t('library.search_models')"
             class="w-full sm:w-80 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-lg px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
           />
+          
+          <!-- Tag Filter Buttons -->
+          <div class="flex flex-wrap gap-2 items-center">
+            <span class="text-xs font-medium text-gray-500">{{ t('library.filter_by_tag') }}:</span>
+            <button
+              @click="filterTag = ''"
+              :class="['px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                filterTag === ''
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                  : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-gray-50']"
+            >{{ t('library.tag_all') }}</button>
+            <button
+              @click="filterTag = 'chat'"
+              :class="['px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                filterTag === 'chat'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                  : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-gray-50']"
+            >{{ t('library.tag_chat') }}</button>
+            <button
+              @click="filterTag = 'code'"
+              :class="['px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                filterTag === 'code'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                  : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-gray-50']"
+            >{{ t('library.tag_code') }}</button>
+            <button
+              @click="filterTag = 'reasoning'"
+              :class="['px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                filterTag === 'reasoning'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                  : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-gray-50']"
+            >{{ t('library.tag_reasoning') }}</button>
+            <button
+              @click="filterTag = 'vision'"
+              :class="['px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                filterTag === 'vision'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                  : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-gray-50']"
+            >{{ t('library.tag_vision') }}</button>
+            <button
+              @click="filterTag = 'math'"
+              :class="['px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                filterTag === 'math'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                  : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-gray-50']"
+            >{{ t('library.tag_math') }}</button>
+            <button
+              @click="filterTag = 'multilingual'"
+              :class="['px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                filterTag === 'multilingual'
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                  : 'bg-white/80 border-gray-200 text-gray-600 hover:bg-gray-50']"
+            >{{ t('library.tag_multilingual') }}</button>
+          </div>
         </div>
 
         <div class="space-y-6">

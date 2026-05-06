@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 12288,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/mistralai/Mistral-Large-Instruct-2407',
     ms: 'https://modelscope.cn/models/LLM-Research/Mistral-Large-Instruct-2407',

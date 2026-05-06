@@ -14,6 +14,7 @@ export default {
   sliding_window: 1024,
   hidden_size: 3840,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull gemma3:12b',
     hf: 'https://huggingface.co/google/gemma-3-12b-it',

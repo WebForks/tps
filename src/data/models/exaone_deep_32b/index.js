@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 32768,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/LGAI-EXAONE/EXAONE-Deep-32B',
     ollama: 'ollama pull exaone-deep:32b',

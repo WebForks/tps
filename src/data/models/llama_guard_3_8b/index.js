@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat'],
+
   links: {
     hf: 'https://huggingface.co/meta-llama/Llama-Guard-3-8B',
   },

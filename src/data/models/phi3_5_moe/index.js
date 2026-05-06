@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/microsoft/Phi-3.5-MoE-instruct',
     ms: 'https://modelscope.cn/models/LLM-Research/Phi-3.5-MoE-instruct',

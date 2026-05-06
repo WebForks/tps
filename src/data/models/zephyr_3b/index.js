@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 4096,
+  tags: ['chat'],
+
   links: {
     hf: 'https://huggingface.co/HuggingFaceH4/zephyr-3b-beta',
   },

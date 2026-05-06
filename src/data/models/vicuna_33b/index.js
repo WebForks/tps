@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 6656,
   max_ctx: 2048,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull vicuna:33b',
     hf: 'https://huggingface.co/lmsys/vicuna-33b-v1.3',

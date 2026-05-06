@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 262144,
+  tags: ['chat', 'multilingual'],
   released: '2025-04',
   links: {
     ollama: 'ollama pull qwen3:235b',

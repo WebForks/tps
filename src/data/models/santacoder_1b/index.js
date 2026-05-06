@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 2048,
+  tags: ['chat', 'code'],
+
   links: {
     hf: 'https://huggingface.co/bigcode/santacoder',
   },

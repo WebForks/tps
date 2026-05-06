@@ -14,6 +14,7 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 131072,
+  tags: ['chat', 'code', 'multilingual'],
   links: {
     ollama: 'ollama pull deepseek-coder-v2:16b',
     hf: 'https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct',

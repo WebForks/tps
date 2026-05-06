@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 32768,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull zephyr',
     hf: 'https://huggingface.co/HuggingFaceH4/zephyr-7b-beta',

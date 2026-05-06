@@ -14,6 +14,7 @@ export default {
   head_dim: 512,
   hidden_size: 7168,
   max_ctx: 262144,
+  tags: ['chat', 'multilingual'],
   released: '2026-04',
   links: {
     hf: 'https://huggingface.co/moonshotai/Kimi-K2.6',

@@ -12,6 +12,8 @@ export default {
   head_dim: 256,
   hidden_size: 2048,
   max_ctx: 8192,
+  tags: ['vision'],
+
   links: {
     hf: 'https://huggingface.co/google/paligemma-3b-pt-224',
   },

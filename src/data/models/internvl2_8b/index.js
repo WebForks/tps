@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['vision'],
   links: {
     hf: 'https://huggingface.co/OpenGVLab/InternVL2-8B',
     ms: 'https://modelscope.cn/models/OpenGVLab/InternVL2-8B',

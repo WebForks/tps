@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 32768,
+  tags: ['chat', 'reasoning'],
+
   links: {
     ollama: 'ollama pull qwq',
     hf: 'https://huggingface.co/Qwen/QwQ-32B-Preview',

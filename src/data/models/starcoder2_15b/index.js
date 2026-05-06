@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 16384,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull starcoder2:15b',
     hf: 'https://huggingface.co/bigcode/starcoder2-15b',

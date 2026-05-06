@@ -16,6 +16,7 @@ export default {
   sliding_window: 0,     // linear attention 不占用 KV cache
   hidden_size: 2048,
   max_ctx: 262144,
+  tags: ['chat', 'multilingual'],
   released: '2026-04',
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen3.6-35B-A3B',

@@ -12,6 +12,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 4096,
+  tags: ['multilingual', 'vision'],
   // Vision encoder: SigLIP-L/14 ~0.3B params, 576 patch tokens per image
   vision_encoder_params: 0.3,
   vision_seq_tokens: 576,

@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 7168,
   max_ctx: 4096,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/Snowflake/snowflake-arctic-instruct',
     ms: 'https://modelscope.cn/models/AI-ModelScope/snowflake-arctic-instruct',

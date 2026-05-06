@@ -11,6 +11,8 @@ export default {
   head_dim: 0,
   hidden_size: 4096,
   max_ctx: 262144,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull codestral-mamba:7b',
     hf: 'https://huggingface.co/mistralai/Mamba-Codestral-7B-v0.1',

@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
+
   links: {
     ollama: 'ollama pull glm4:9b',
     hf: 'https://huggingface.co/THUDM/glm-4-9b-chat',

@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 3584,
   max_ctx: 65536,
+  tags: ['chat', 'reasoning'],
+
   links: {
     ollama: 'ollama pull nemotron-cascade:14b',
     hf: 'https://huggingface.co/nvidia/Nemotron-Cascade-14B-Thinking',

@@ -17,6 +17,7 @@ export default {
   local_layers: 12,
   sliding_window: 128,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull gpt-oss:20b',
     hf: 'https://huggingface.co/openai/gpt-oss-20b',

@@ -15,6 +15,7 @@ export default {
   head_dim: 64,
   hidden_size: 6144,
   max_ctx: 200000,
+  tags: ['chat', 'multilingual'],
   released: '2026-03',
   links: {
     hf: 'https://huggingface.co/zai-org/GLM-5.1',

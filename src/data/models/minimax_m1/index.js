@@ -15,6 +15,7 @@ export default {
   head_dim: 128,
   hidden_size: 6144,
   max_ctx: 1048576,
+  tags: ['chat', 'multilingual'],
   released: '2025-05',
   links: {
     hf: 'https://huggingface.co/MiniMaxAI/MiniMax-M1-40k',

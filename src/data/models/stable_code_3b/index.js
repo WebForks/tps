@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 2304,
   max_ctx: 16384,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull stable-code:3b',
     hf: 'https://huggingface.co/stabilityai/stable-code-3b',

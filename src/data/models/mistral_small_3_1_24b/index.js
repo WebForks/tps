@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503',
     ollama: 'ollama pull mistral-small3.1',

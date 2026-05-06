@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 4096,
+  tags: ['multilingual', 'vision'],
+
   links: {
     hf: 'https://huggingface.co/deepseek-ai/Janus-1.3B',
     ms: 'https://modelscope.cn/models/deepseek-ai/Janus-1.3B',

@@ -14,6 +14,8 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 8192,
+  tags: ['chat'],
+
   links: {
     ollama: null,
     hf: 'https://huggingface.co/LiquidAI/LFM2-8B-A1B',

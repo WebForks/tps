@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 2048,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/IDEA-CCNL/Ziya-LLaMA-13B-v1',
     ms: 'https://modelscope.cn/models/Fengshenbang/Ziya-LLaMA-13B-v1',

@@ -16,6 +16,7 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 245760,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/MiniMaxAI/MiniMax-Text-01',
   },

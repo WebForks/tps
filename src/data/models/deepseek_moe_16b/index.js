@@ -16,6 +16,7 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 4096,
+  tags: ['chat', 'multilingual'],
   links: {
     hf: 'https://huggingface.co/deepseek-ai/deepseek-moe-16b-chat',
     ms: 'https://modelscope.cn/models/deepseek-ai/deepseek-moe-16b-chat',

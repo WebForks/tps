@@ -11,6 +11,7 @@ export default {
   head_dim: 64,
   hidden_size: 8192,
   max_ctx: 2048,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/tiiuae/falcon-40b-instruct',
     ms: 'https://modelscope.cn/models/AI-ModelScope/falcon-40b-instruct',

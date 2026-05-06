@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 200000,
+  tags: ['chat', 'multilingual'],
+
   links: {
     ollama: 'ollama pull yi:9b',
     hf: 'https://huggingface.co/01-ai/Yi-9B',

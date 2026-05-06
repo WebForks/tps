@@ -89,12 +89,16 @@ const filterMinQuant = ref(_p.minquant ?? '')
 // 隐藏需要 CPU 卸载的模型
 const hideOffload = ref(_p.hideoffload === '1')
 
+// 显示 legacy 模型（默认隐藏）
+const filterLegacy = ref(_p.legacy === '1')
+
 // 是否有激活的筛选（用于显示"已筛选"标记）
 const hasActiveFilters = computed(() =>
   filterParams.value !== 'all' ||
   filterMinSpeed.value !== '0' ||
   filterMinQuant.value !== '' ||
-  hideOffload.value
+  hideOffload.value ||
+  filterLegacy.value
 )
 
 function resetFilters() {
@@ -102,13 +106,14 @@ function resetFilters() {
   filterMinSpeed.value = '0'
   filterMinQuant.value = ''
   hideOffload.value = false
+  filterLegacy.value = false
 }
 
 // ── URL 同步 ─────────────────────────────────────────
 watch(
   [gpuSlots, interconnect, ctx, batch, framework, sortBy, filterType, showOnlyRunnable, sharedVram,
-   filterParams, filterMinSpeed, filterMinQuant, hideOffload],
-  ([slots, ic, c, b, fw, sort, type, runnable, sv, params, minspeed, minquant, offload]) => {
+   filterParams, filterMinSpeed, filterMinQuant, hideOffload, filterLegacy],
+  ([slots, ic, c, b, fw, sort, type, runnable, sv, params, minspeed, minquant, offload, legacy]) => {
     const query = {}
     if (slots?.length) query.gpus = slots.map(s => `${s.gpu.id}:${s.count}`).join(',')
     if (ic?.id) query.ic = ic.id
@@ -123,6 +128,7 @@ watch(
     if (minspeed !== '0') query.minspeed = minspeed
     if (minquant !== '') query.minquant = minquant
     if (offload) query.hideoffload = '1'
+    if (legacy) query.legacy = '1'
     router.replace({ query })
   }
 )
@@ -251,6 +257,11 @@ watch(
 // ── 后置筛选（在已排序结果上叠加）──────────────────────
 const modelResults = computed(() => {
   let list = allModelResults.value.filter(Boolean)
+
+  // 过滤 legacy 模型（默认隐藏）
+  if (!filterLegacy.value) {
+    list = list.filter(item => item.model.status !== 'legacy')
+  }
 
   // 参数量范围
   if (filterParams.value !== 'all') {
@@ -387,6 +398,11 @@ function useThisModel(modelData) {
           <label class="flex items-center gap-1.5 cursor-pointer select-none">
             <input type="checkbox" v-model="hideOffload" class="w-3.5 h-3.5 accent-emerald-500 rounded" />
             <span class="text-xs text-gray-600">{{ t('ranking.filter_hide_offload') }}</span>
+          </label>
+
+          <label class="flex items-center gap-1.5 cursor-pointer select-none">
+            <input type="checkbox" v-model="filterLegacy" class="w-3.5 h-3.5 accent-emerald-500 rounded" />
+            <span class="text-xs text-gray-600">{{ t('ranking.filter_show_legacy') }}</span>
           </label>
 
           <div class="ml-auto flex items-center gap-2">

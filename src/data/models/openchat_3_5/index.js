@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull openchat',
     hf: 'https://huggingface.co/openchat/openchat-3.5-0106',

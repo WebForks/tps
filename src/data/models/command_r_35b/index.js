@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/CohereForAI/c4ai-command-r-v01',
     ms: 'https://modelscope.cn/models/AI-ModelScope/c4ai-command-r-v01',

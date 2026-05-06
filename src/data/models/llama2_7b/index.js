@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 4096,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/meta-llama/Llama-2-7b-chat-hf',
     ms: 'https://modelscope.cn/models/modelscope/Llama-2-7b-chat-ms',

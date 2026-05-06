@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 2048,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/THUDM/chatglm-6b',
     ms: 'https://modelscope.cn/models/ZhipuAI/chatglm-6b',

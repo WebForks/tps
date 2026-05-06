@@ -9,6 +9,7 @@ export default {
   head_dim: 64,
   hidden_size: 2048,
   max_ctx: 2048,
+  tags: ['chat'],
   links: {
     ollama: 'ollama pull tinyllama',
     hf: 'https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0',

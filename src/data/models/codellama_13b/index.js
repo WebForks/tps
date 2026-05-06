@@ -11,6 +11,8 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 16384,
+  tags: ['chat', 'code'],
+
   links: {
     ollama: 'ollama pull codellama:13b',
     hf: 'https://huggingface.co/codellama/CodeLlama-13b-hf',

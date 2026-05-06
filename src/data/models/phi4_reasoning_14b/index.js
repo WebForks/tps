@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 32768,
+  tags: ['chat', 'reasoning'],
   links: {
     hf: 'https://huggingface.co/microsoft/Phi-4-reasoning',
     ollama: 'ollama pull phi4-reasoning',

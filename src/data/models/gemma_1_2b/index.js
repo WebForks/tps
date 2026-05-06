@@ -11,6 +11,7 @@ export default {
   head_dim: 256,
   hidden_size: 2048,
   max_ctx: 8192,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/google/gemma-2b-it',
     ms: 'https://modelscope.cn/models/AI-ModelScope/gemma-2b-it',

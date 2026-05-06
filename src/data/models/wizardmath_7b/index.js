@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 4096,
+  tags: ['chat', 'math'],
+
   links: {
     ollama: 'ollama pull wizardmath:7b',
     hf: 'https://huggingface.co/WizardLM/WizardMath-7B-V1.0',

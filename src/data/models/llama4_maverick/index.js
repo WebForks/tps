@@ -19,6 +19,7 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 1048576,
+  tags: ['chat'],
   released: '2025-04',
   links: {
     ollama: 'ollama pull llama4:maverick',

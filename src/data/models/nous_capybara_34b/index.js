@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 7168,
   max_ctx: 200000,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull nous-capybara:34b',
     hf: 'https://huggingface.co/NousResearch/Nous-Capybara-34B',

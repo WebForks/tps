@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 4096,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/YeungNLP/firefly-llama2-7b',
     ms: 'https://modelscope.cn/models/YeungNLP/firefly-llama2-7b',

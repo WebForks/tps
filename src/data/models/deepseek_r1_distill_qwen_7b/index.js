@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 3584,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual', 'reasoning'],
   links: {
     ollama: 'ollama pull deepseek-r1:7b',
     hf: 'https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',

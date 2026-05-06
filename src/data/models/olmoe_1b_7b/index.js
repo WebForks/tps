@@ -14,6 +14,7 @@ export default {
   head_dim: 128,
   hidden_size: 2048,
   max_ctx: 4096,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/allenai/OLMoE-1B-7B-0924',
   },

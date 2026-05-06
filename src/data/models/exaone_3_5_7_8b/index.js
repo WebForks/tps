@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct',
     ms: 'https://modelscope.cn/models/LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct',

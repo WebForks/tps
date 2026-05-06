@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/CohereForAI/c4ai-command-r7b-12-2024',
     ollama: 'ollama pull command-r7b',

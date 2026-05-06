@@ -13,6 +13,7 @@ export default {
   head_dim: 128,
   hidden_size: 7168,
   max_ctx: 131072,
+  tags: ['chat', 'multilingual'],
   links: {
     ollama: 'ollama pull deepseek-v3',
     hf: 'https://huggingface.co/deepseek-ai/DeepSeek-V3',

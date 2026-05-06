@@ -18,6 +18,7 @@ export default {
   head_dim: 512,
   hidden_size: 4096,
   max_ctx: 1048576,
+  tags: ['chat', 'multilingual'],
   released: '2026-04',
   links: {
     hf: 'https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash',

@@ -11,6 +11,7 @@ export default {
   head_dim: 128,
   hidden_size: 8192,
   max_ctx: 131072,
+  tags: ['chat'],
   links: {
     hf: 'https://huggingface.co/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF',
     ms: 'https://modelscope.cn/models/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF',

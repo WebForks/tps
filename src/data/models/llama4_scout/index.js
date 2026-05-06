@@ -19,6 +19,7 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 10485760,
+  tags: ['chat'],
   released: '2025-04',
   links: {
     ollama: 'ollama pull llama4:scout',

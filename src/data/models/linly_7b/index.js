@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 2048,
+  tags: ['chat', 'multilingual'],
+
   links: {
     hf: 'https://huggingface.co/Linly-AI/Chinese-LLaMA-2-7B-hf',
     ms: 'https://modelscope.cn/models/Linly-AI/Chinese-LLaMA-2-7B-hf',

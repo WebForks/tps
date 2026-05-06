@@ -12,6 +12,8 @@ export default {
   head_dim: 128,
   hidden_size: 4096,
   max_ctx: 8192,
+  tags: ['chat'],
+
   links: {
     ollama: 'ollama pull openhermes',
     hf: 'https://huggingface.co/teknium/OpenHermes-2.5-Mistral-7B',
