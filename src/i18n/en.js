@@ -324,7 +324,7 @@ export default {
     high_power: 'Total power >{power} kW — check datacenter PDU capacity',
     activation_high: 'Peak activation memory {gb} GB (normal for large batch + long context, managed by framework)',
     apple_small_model_accuracy: 'Small models (<15B) on Apple Silicon are strongly affected by cache behavior; actual speed may be 30-50% above or below estimate.',
-    apple_moe_midrange_accuracy: 'MoE expert-dispatch overhead on mid/low-end Apple chips (below M4 Max) is hard to model precisely; estimates may be 30-60% optimistic.',
+    apple_moe_midrange_accuracy: 'MoE expert-dispatch overhead on non-flagship Apple chips (memory bandwidth <580 GB/s) is hard to model precisely; estimates may be 30-60% optimistic.',
     top1_moe_accuracy: 'top-1 routing (for example, Llama 4 Scout) still has dispatch overhead that is not fully modeled; estimate accuracy is limited.',
   },
   accuracy: {

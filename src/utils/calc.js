@@ -507,7 +507,7 @@ export function calcAll({
     if (gpu.vendor !== 'apple') return 'high'
     if (model.params < 15) return 'low'
     if (model.type === 'moe' && model.experts_per_token === 1) return 'low'
-    if (model.type === 'moe' && gpu.bw < 500) return 'mid'
+    if (model.type === 'moe' && gpu.bw < 580) return 'mid'
     if (model.params >= 30 && gpu.bw >= 500) return 'high'
     return 'mid'
   })()
@@ -648,9 +648,16 @@ function getAppleMoeExtraDecodeMs({ gpu, framework, model, batch }) {
   }
   const executionScale = executionScaleMap[executionMode] ?? 0.55
   const batchScale = 1 / Math.sqrt(Math.max(1, batch))
+
+  // top-1 routing（如 Llama 4 Scout）存在显著固定 gate/dispatch 开销，
+  // 不应被 fanoutScale 和 activeFragments 稀释。
+  if (activeExperts <= 1) {
+    const top1FixedUsPerLayer = 800
+    return ((model.layers ?? 1) * top1FixedUsPerLayer * batchScale) / 1000
+  }
+
   const fanoutScale = Math.sqrt(Math.max(1, totalExperts / 128))
-  // top-1 routing 仍有固定 gate / dispatch 开销，不能按 0 fragment 处理
-  const baseFragments = activeExperts <= 1 ? 1 : activeExperts - 1
+  const baseFragments = activeExperts - 1
   const activeFragmentCount = baseFragments
   const bwScale = Math.max(1.0, Math.sqrt(600 / (gpu.bw ?? 600)))
 
@@ -760,7 +767,7 @@ export function getWarnings(result, t) {
     warnings.push({ level: 'info', key: 'apple_small_model_accuracy' })
   }
 
-  if (gpuVendor === 'apple' && modelType === 'moe' && gpuBw < 500) {
+  if (gpuVendor === 'apple' && modelType === 'moe' && gpuBw < 580) {
     warnings.push({ level: 'info', key: 'apple_moe_midrange_accuracy' })
   }
 
