@@ -323,6 +323,14 @@ export default {
     bw_bottleneck: '带宽严重瓶颈，增大 batch 可提升 GPU 利用率',
     high_power: '总功耗 >{power} kW，注意机房 PDU 容量',
     activation_high: '激活值峰值 {gb} GB（大批次长序列正常现象，框架自动管理）',
+    apple_small_model_accuracy: '小模型（<15B）在 Apple Silicon 上受 cache 效应影响，实际速度可能高于或低于估算 30-50%，仅供参考。',
+    apple_moe_midrange_accuracy: 'MoE 模型在中低端 Apple 芯片（M4 Max 以下）的 expert dispatch 开销较难精确建模，估算可能偏高 30-60%。',
+    top1_moe_accuracy: 'top-1 routing（如 Llama 4 Scout）的 expert dispatch 开销建模尚不完善，估算准确性较低。',
+  },
+  accuracy: {
+    high: '高置信度',
+    mid: '中置信度',
+    low: '低置信度',
   },
   framework: {
     theory: '理论峰值',

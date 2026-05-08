@@ -78,9 +78,9 @@ export const FRAMEWORK_MAP = [
     appleMoeDispatchUs: 25,
     // 模型规模效率缩放系数（Apple Metal 后端相比 CUDA 略高）
     modelSizeScaling: [
-      { maxParams: 14, decode: 0.57, decodeMin: 0.52, decodeMax: 0.62 },  // <14B
-      { maxParams: 30, decode: 0.61, decodeMin: 0.56, decodeMax: 0.66 }, // 14-30B
-      { maxParams: Infinity, decode: 0.65, decodeMin: 0.60, decodeMax: 0.70 }, // >30B
+      { maxParams: 14, decode: 0.57, decodeMin: 0.52, decodeMax: 0.65 },  // <14B
+      { maxParams: 30, decode: 0.72, decodeMin: 0.65, decodeMax: 0.80 }, // 14-30B
+      { maxParams: Infinity, decode: 0.88, decodeMin: 0.82, decodeMax: 0.95 }, // >30B
     ]
   },
   // 通用 CPU/跨平台

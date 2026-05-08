@@ -503,6 +503,14 @@ export function calcAll({
   // 能效比：tok/J = decode吞吐(tok/s) / 总功耗(W)
   // 方便数据中心选型比较能效
   const tokPerJoule = totalPower > 0 ? effectiveToks / (totalPower * 1000) : null
+  const accuracyTier = (() => {
+    if (gpu.vendor !== 'apple') return 'high'
+    if (model.params < 15) return 'low'
+    if (model.type === 'moe' && model.experts_per_token === 1) return 'low'
+    if (model.type === 'moe' && gpu.bw < 500) return 'mid'
+    if (model.params >= 30 && gpu.bw >= 500) return 'high'
+    return 'mid'
+  })()
 
   return {
     // 显存
@@ -550,6 +558,12 @@ export function calcAll({
     ppP2pMs,
     imageCount,
     visionPatchTokens,
+    accuracyTier,
+    gpuVendor: gpu.vendor,
+    gpuBw: gpu.bw,
+    modelType: model.type,
+    modelParams: model.params,
+    modelExpertsPerToken: model.experts_per_token ?? null,
   }
 }
 
@@ -623,10 +637,11 @@ function getAppleMoeExtraDecodeMs({ gpu, framework, model, batch }) {
 
   const activeExperts = model.experts_per_token ?? 1
   const totalExperts = model.experts ?? activeExperts
-  if (activeExperts <= 1 || totalExperts <= 1) return 0
+  if (totalExperts <= 1) return 0
 
-  const executionMode = model.moe_execution ?? 'routed'
+  const executionMode = model.moe_execution ?? (activeExperts <= 1 ? 'top1_routed' : 'routed')
   const executionScaleMap = {
+    top1_routed: 0.20,
     routed: 0.55,
     shared_routed: 0.70,
     parallel_dense_routed: 1.00,
@@ -634,7 +649,10 @@ function getAppleMoeExtraDecodeMs({ gpu, framework, model, batch }) {
   const executionScale = executionScaleMap[executionMode] ?? 0.55
   const batchScale = 1 / Math.sqrt(Math.max(1, batch))
   const fanoutScale = Math.sqrt(Math.max(1, totalExperts / 128))
-  const activeFragmentCount = Math.max(0, activeExperts - 1)
+  // top-1 routing 仍有固定 gate / dispatch 开销，不能按 0 fragment 处理
+  const baseFragments = activeExperts <= 1 ? 1 : activeExperts - 1
+  const activeFragmentCount = baseFragments
+  const bwScale = Math.max(1.0, Math.sqrt(600 / (gpu.bw ?? 600)))
 
   const extraUs =
     (model.layers ?? 1) *
@@ -642,7 +660,8 @@ function getAppleMoeExtraDecodeMs({ gpu, framework, model, batch }) {
     framework.appleMoeDispatchUs *
     executionScale *
     fanoutScale *
-    batchScale
+    batchScale *
+    bwScale
 
   return extraUs / 1000
 }
@@ -678,7 +697,25 @@ function getFlashAttentionBoostRange({ enabled, promptLen, headDim = 128 }) {
  */
 export function getWarnings(result, t) {
   const warnings = []
-  const { vramOk, vramPct, totalNeeded, totalVram, tpEfficiency, singleToks, singleToksMin, roofline, totalPower, activationGB, cpuRamNeededGB, sysRam } = result
+  const {
+    vramOk,
+    vramPct,
+    totalNeeded,
+    totalVram,
+    tpEfficiency,
+    singleToks,
+    singleToksMin,
+    roofline,
+    totalPower,
+    activationGB,
+    cpuRamNeededGB,
+    sysRam,
+    gpuVendor,
+    gpuBw,
+    modelParams,
+    modelType,
+    modelExpertsPerToken,
+  } = result
 
   if (!vramOk) {
     warnings.push({
@@ -717,6 +754,18 @@ export function getWarnings(result, t) {
       diff: (cpuRamNeededGB - sysRam).toFixed(1),
       needed: cpuRamNeededGB.toFixed(1),
     })
+  }
+
+  if (gpuVendor === 'apple' && modelParams < 15) {
+    warnings.push({ level: 'info', key: 'apple_small_model_accuracy' })
+  }
+
+  if (gpuVendor === 'apple' && modelType === 'moe' && gpuBw < 500) {
+    warnings.push({ level: 'info', key: 'apple_moe_midrange_accuracy' })
+  }
+
+  if (modelType === 'moe' && modelExpertsPerToken === 1) {
+    warnings.push({ level: 'info', key: 'top1_moe_accuracy' })
   }
 
   return warnings

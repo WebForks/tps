@@ -49,6 +49,17 @@ const quant = defineModel('quant', { required: true })
             :class="model.type === 'moe' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'"
             class="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
           >{{ model.type === 'moe' ? 'MoE' : 'Dense' }}</span>
+          <span
+            v-if="result?.accuracyTier"
+            :class="
+              result.accuracyTier === 'high'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : result.accuracyTier === 'low'
+                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+            "
+            class="text-xs font-semibold px-2 py-0.5 rounded-full border flex-shrink-0"
+          >{{ t(`accuracy.${result.accuracyTier}`) }}</span>
           <div class="text-base font-bold text-gray-900 truncate">{{ model.name }}</div>
         </div>
         <div v-if="gpu" class="flex-shrink-0 text-right">
