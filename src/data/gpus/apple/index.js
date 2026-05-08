@@ -5,14 +5,15 @@
 // tdp 为整机 SoC TDP，非独立 GPU 功耗
 // bwUtilization 实测校准（llama.cpp #4167，LLaMA 7B Q4_0 tg128）：
 //   Max 芯片（单 die）：0.90（实测误差 <10%）
+//   M5 Max 40-core：0.99（实测 102.93-104.03 tok/s，对应 build 8e672ef）
 //   Ultra 芯片（双 die UltraFusion）：0.67（跨 die 内存读取有额外延迟，实测误差 <5%）
 //   Pro/base 芯片：0.82（无足够实测数据校准）
 export default [
   // ── M5 Max ──────────────────────────────────────────
   // 40-core GPU, 614 GB/s
-  { id: 'apple_m5_max_128g', name: 'Apple M5 Max (128GB)', vendor: 'apple', tier: 'consumer', released: '2026-03', vram: 128, bw: 614, bwUtilization: 0.90, bf16: 27.0, int8: 54.0, int4: null, nvlink_bw: null, tdp: 70, unifiedMemory: true, usableRatio: 0.75 },
-  { id: 'apple_m5_max_64g',  name: 'Apple M5 Max (64GB)',  vendor: 'apple', tier: 'consumer', released: '2026-03', vram: 64,  bw: 614, bwUtilization: 0.90, bf16: 27.0, int8: 54.0, int4: null, nvlink_bw: null, tdp: 70, unifiedMemory: true, usableRatio: 0.75 },
-  { id: 'apple_m5_max_48g',  name: 'Apple M5 Max (48GB)',  vendor: 'apple', tier: 'consumer', released: '2026-03', vram: 48,  bw: 614, bwUtilization: 0.90, bf16: 27.0, int8: 54.0, int4: null, nvlink_bw: null, tdp: 70, unifiedMemory: true, usableRatio: 0.75 },
+  { id: 'apple_m5_max_128g', name: 'Apple M5 Max (128GB)', vendor: 'apple', tier: 'consumer', released: '2026-03', vram: 128, bw: 614, bwUtilization: 0.99, bf16: 27.0, int8: 54.0, int4: null, nvlink_bw: null, tdp: 70, unifiedMemory: true, usableRatio: 0.75 },
+  { id: 'apple_m5_max_64g',  name: 'Apple M5 Max (64GB)',  vendor: 'apple', tier: 'consumer', released: '2026-03', vram: 64,  bw: 614, bwUtilization: 0.99, bf16: 27.0, int8: 54.0, int4: null, nvlink_bw: null, tdp: 70, unifiedMemory: true, usableRatio: 0.75 },
+  { id: 'apple_m5_max_48g',  name: 'Apple M5 Max (48GB)',  vendor: 'apple', tier: 'consumer', released: '2026-03', vram: 48,  bw: 614, bwUtilization: 0.99, bf16: 27.0, int8: 54.0, int4: null, nvlink_bw: null, tdp: 70, unifiedMemory: true, usableRatio: 0.75 },
   // 32-core GPU, 460 GB/s
   { id: 'apple_m5_max_36g',  name: 'Apple M5 Max (36GB)',  vendor: 'apple', tier: 'consumer', released: '2026-03', vram: 36,  bw: 460, bwUtilization: 0.90, bf16: 20.2, int8: 40.4, int4: null, nvlink_bw: null, tdp: 62, unifiedMemory: true, usableRatio: 0.75 },
   // ── M5 Ultra ────────────────────────────────────────
