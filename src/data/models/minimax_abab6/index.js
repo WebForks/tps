@@ -1,4 +1,4 @@
-// MiniMax ABAB 6: base generation model
+﻿// MiniMax ABAB 6: base generation model
 // Released: September 2024
 // Source: https://platform.minimaxi.com/document/guides/chat-model/V6
 export default {

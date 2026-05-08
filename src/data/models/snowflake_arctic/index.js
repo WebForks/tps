@@ -1,4 +1,4 @@
-// Snowflake Arctic 480B: dense residual + MoE, 480B total / 17B active, 40 layers, 4K ctx
+﻿// Snowflake Arctic 480B: dense residual + MoE, 480B total / 17B active, 40 layers, 4K ctx
 // Source: https://huggingface.co/Snowflake/snowflake-arctic-instruct/blob/main/config.json
 export default {
   id: 'snowflake_arctic',

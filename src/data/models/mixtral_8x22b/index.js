@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   id: 'mixtral_8x22b',
   released: '2024-04',
   name: 'Mixtral 8x22B',

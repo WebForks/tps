@@ -1,4 +1,4 @@
-// DeepSeek V2.5: MoE with MLA, 60 layers, 128K ctx
+﻿// DeepSeek V2.5: MoE with MLA, 60 layers, 128K ctx
 // Same architecture as DeepSeek V2; combines V2-Chat and V2-Coder capabilities
 // Source: https://huggingface.co/deepseek-ai/DeepSeek-V2.5/blob/main/config.json
 export default {
@@ -10,6 +10,7 @@ export default {
   active_params: 21,
   experts: 160,
   experts_per_token: 6,
+  moe_execution: 'shared_routed',
   mla_ratio: 0.18,
   layers: 60,
   kv_heads: 128,

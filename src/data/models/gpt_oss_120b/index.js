@@ -1,4 +1,4 @@
-// gpt-oss-120b: MoE, 36 layers, 128 experts top-4, GQA 64Q/8KV, sliding_window=128 (every 2nd layer)
+﻿// gpt-oss-120b: MoE, 36 layers, 128 experts top-4, GQA 64Q/8KV, sliding_window=128 (every 2nd layer)
 // 117B total params, 5.1B active params
 // Source: https://huggingface.co/openai/gpt-oss-120b/blob/main/original/config.json
 export default {

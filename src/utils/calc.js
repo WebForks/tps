@@ -80,10 +80,8 @@ export function calcAll({
   let epWeightGB = null  // EP 模式下每卡实际权重（GB）
   let nonExpertParams = null
   if (isEP) {
-    const denom = model.experts_per_token - model.experts
-    if (denom !== 0) {
-      nonExpertParams = (model.params * model.experts_per_token - model.experts * model.active_params) / denom
-    } else {
+    nonExpertParams = getMoeNonExpertParams(model)
+    if (nonExpertParams == null) {
       // experts_per_token === experts（top-all）：无 expert 分离，EP 退化为 TP
       nonExpertParams = model.active_params
     }
@@ -197,8 +195,9 @@ export function calcAll({
       ? model.active_params * quant.bytes
       : weightGB
 
-  const decodeFactorMin = adjustedFramework.decodeMin ?? adjustedFramework.decode
-  const decodeFactorMax = adjustedFramework.decodeMax ?? adjustedFramework.decode
+  const decodeFactors = getDecodeFactors({ framework: adjustedFramework })
+  const decodeFactorMin = decodeFactors.min
+  const decodeFactorMax = decodeFactors.max
   const prefillFactorMin = adjustedFramework.prefillMin ?? adjustedFramework.prefill
   const prefillFactorMax = adjustedFramework.prefillMax ?? adjustedFramework.prefill
   const flashRange = getFlashAttentionBoostRange({ enabled: flashAttention, promptLen: promptLen, headDim: model.head_dim ?? 128 })
@@ -270,9 +269,8 @@ export function calcAll({
       // non_expert_total = (params × experts_per_token - experts × active_params) / (experts_per_token - experts)
       // 前提：experts_per_token < experts（正常 MoE 路由，每 token 只激活部分专家）
       // 边界：experts_per_token === experts 时分母为零（top-all 或数据异常），回退到 70% 估算
-      const denom = model.experts_per_token - model.experts
-      if (denom !== 0) {
-        const non_expert_total = (model.params * model.experts_per_token - model.experts * model.active_params) / denom
+      const non_expert_total = getMoeNonExpertParams(model)
+      if (non_expert_total != null) {
         const active_expert_params = model.active_params - non_expert_total
         // active_expert_params 理论上应 > 0；若算出负值说明数据异常，同样回退
         expertIOPerStep = active_expert_params > 0
@@ -322,11 +320,6 @@ export function calcAll({
     }
   }
 
-  // decodeToks 在 bwLimit 最终确定后统一计算
-  let decodeToks = bwLimit * adjustedFramework.decode * speculativeSpeedup
-  let decodeToksMin = bwLimit * decodeFactorMin * speculativeSpeedup
-  let decodeToksMax = bwLimit * decodeFactorMax * speculativeSpeedup
-
   // ─────────────────────────────────────────────
   // Prefill 速度（算力瓶颈）
   // ─────────────────────────────────────────────
@@ -368,14 +361,36 @@ export function calcAll({
   // offload 模式：bwLimit 已包含串行 IO，从 bwLimit 反推 tpot 保持一致
   // PP 模式：batch / bwLimit 已包含 ppCount 和 ppBubbleEff，反推出每请求 tpot
   // 再叠加 PP 阶段间 P2P 通信延迟 ppP2pMs
-  const tpotBase = (pureCpu && cpuMemBw != null)
-    ? (decodeBytesPerStep / effectiveBw) * 1000 / framework.decode  // ms/tok，纯 DDR 带宽
-    : (isLlamaCppHybrid && cpuMemBw != null)
-      ? (batch / bwLimit) * 1000 / framework.decode
-      : (cpuOffload && model.type === 'moe' && pcieBw != null)
-        ? (batch / bwLimit) * 1000 / framework.decode
-        : (decodeBytesPerStep / ppCount / effectiveBw / ppBubbleEff) * 1000 / framework.decode
-  const tpot = tpotBase + ppP2pMs
+  const getDecodeTpotBaseMs = (decodeFactor) => {
+    if (pureCpu && cpuMemBw != null) {
+      return (decodeBytesPerStep / effectiveBw) * 1000 / decodeFactor
+    }
+    if (isLlamaCppHybrid && cpuMemBw != null) {
+      return (batch / bwLimit) * 1000 / decodeFactor
+    }
+    if (cpuOffload && model.type === 'moe' && pcieBw != null) {
+      return (batch / bwLimit) * 1000 / decodeFactor
+    }
+    return (decodeBytesPerStep / ppCount / effectiveBw / ppBubbleEff) * 1000 / decodeFactor
+  }
+
+  const moeExtraDecodeMs = getAppleMoeExtraDecodeMs({
+    gpu,
+    framework: adjustedFramework,
+    model,
+    batch,
+  })
+  const tpotBase = getDecodeTpotBaseMs(decodeFactors.mid)
+  const tpotBaseMin = getDecodeTpotBaseMs(decodeFactorMin)
+  const tpotBaseMax = getDecodeTpotBaseMs(decodeFactorMax)
+
+  // decodeToks 在 tpotBase 最终确定后统一计算。
+  // Apple MoE 的额外 dispatch 延迟体现在每 token 的串行时间上，而不是简单吞吐折扣。
+  let decodeToks = batch / Math.max((tpotBase + moeExtraDecodeMs) / 1000, 1e-9) * speculativeSpeedup
+  let decodeToksMin = batch / Math.max((tpotBaseMin + moeExtraDecodeMs) / 1000, 1e-9) * speculativeSpeedup
+  let decodeToksMax = batch / Math.max((tpotBaseMax + moeExtraDecodeMs) / 1000, 1e-9) * speculativeSpeedup
+
+  const tpot = tpotBase + moeExtraDecodeMs + ppP2pMs
 
   // ─────────────────────────────────────────────
   // Roofline 分析
@@ -582,6 +597,54 @@ function getPrefillAttentionFactor({ totalHeads, kvHeads, headDim, layers, promp
   // factor = (softmax_attn_extra + ffn) / ffn
   // 线性 attention 层的 O(n) FLOPs 已在 ffnFlopsPerToken 中，不重复计入
   return (softmaxAttnFlops + ffnFlopsPerToken) / ffnFlopsPerToken
+}
+
+function getMoeNonExpertParams(model) {
+  if (model?.type !== 'moe' || model.active_params == null || model.params == null) return null
+  if (!model.experts || !model.experts_per_token) return null
+
+  const denom = model.experts_per_token - model.experts
+  if (denom === 0) return null
+
+  return (model.params * model.experts_per_token - model.experts * model.active_params) / denom
+}
+
+function getDecodeFactors({ framework }) {
+  return {
+    mid: framework.decode,
+    min: framework.decodeMin ?? framework.decode,
+    max: framework.decodeMax ?? framework.decode,
+  }
+}
+
+function getAppleMoeExtraDecodeMs({ gpu, framework, model, batch }) {
+  if (gpu?.vendor !== 'apple' || model?.type !== 'moe') return 0
+  if (framework.appleMoeDispatchUs == null) return 0
+
+  const activeExperts = model.experts_per_token ?? 1
+  const totalExperts = model.experts ?? activeExperts
+  if (activeExperts <= 1 || totalExperts <= 1) return 0
+
+  const executionMode = model.moe_execution ?? 'routed'
+  const executionScaleMap = {
+    routed: 0.55,
+    shared_routed: 0.70,
+    parallel_dense_routed: 1.00,
+  }
+  const executionScale = executionScaleMap[executionMode] ?? 0.55
+  const batchScale = 1 / Math.sqrt(Math.max(1, batch))
+  const fanoutScale = Math.sqrt(Math.max(1, totalExperts / 128))
+  const activeFragmentCount = Math.max(0, activeExperts - 1)
+
+  const extraUs =
+    (model.layers ?? 1) *
+    activeFragmentCount *
+    framework.appleMoeDispatchUs *
+    executionScale *
+    fanoutScale *
+    batchScale
+
+  return extraUs / 1000
 }
 
 function getFlashAttentionBoostRange({ enabled, promptLen, headDim = 128 }) {

@@ -1,4 +1,4 @@
-// GLM-4.6: 355B MoE, 32B active, 160 experts (8 active), 200K context
+﻿// GLM-4.6: 355B MoE, 32B active, 160 experts (8 active), 200K context
 // Released: September 2025
 // Source: https://huggingface.co/zai-org/GLM-4.6
 export default {

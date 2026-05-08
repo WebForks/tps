@@ -1,4 +1,4 @@
-// Kimi K1: first generation model
+﻿// Kimi K1: first generation model
 // Released: March 2024
 // Source: https://platform.moonshot.cn/docs/intro
 export default {

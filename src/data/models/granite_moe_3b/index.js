@@ -1,4 +1,4 @@
-// IBM Granite MoE 3B/800M: 8 experts (2 active), 40 layers, 128K ctx
+﻿// IBM Granite MoE 3B/800M: 8 experts (2 active), 40 layers, 128K ctx
 // Source: https://huggingface.co/ibm-granite/granite-3.0-3b-a800m-instruct/blob/main/config.json
 export default {
   id: 'granite_moe_3b',

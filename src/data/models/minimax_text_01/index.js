@@ -1,4 +1,4 @@
-// MiniMax-Text-01: 456B MoE, 45.9B active, 10M context, Lightning+Softmax hybrid attention
+﻿// MiniMax-Text-01: 456B MoE, 45.9B active, 10M context, Lightning+Softmax hybrid attention
 // Released: January 2025
 // Source: https://huggingface.co/MiniMaxAI/MiniMax-Text-01
 export default {

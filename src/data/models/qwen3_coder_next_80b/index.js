@@ -1,4 +1,4 @@
-// Qwen3 Coder Next 80B: MoE with 3B active parameters
+﻿// Qwen3 Coder Next 80B: MoE with 3B active parameters
 // 80B total params, 3B active per token, designed for coding agents
 // Source: https://huggingface.co/Qwen/qwen3-coder-next
 export default {

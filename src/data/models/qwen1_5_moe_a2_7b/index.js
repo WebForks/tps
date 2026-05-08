@@ -1,4 +1,4 @@
-// Qwen1.5-MoE-A2.7B: MoE 14.3B total / 2.7B active, 24 layers, 32K ctx
+﻿// Qwen1.5-MoE-A2.7B: MoE 14.3B total / 2.7B active, 24 layers, 32K ctx
 // 60 experts per layer, 4 active; GQA (16 heads / 8 KV heads)
 // Source: https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B/blob/main/config.json
 export default {

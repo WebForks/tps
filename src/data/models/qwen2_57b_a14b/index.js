@@ -1,4 +1,4 @@
-// Qwen2 57B-A14B: MoE, 57.4B total / 14.3B active, 28 layers, 64K ctx
+﻿// Qwen2 57B-A14B: MoE, 57.4B total / 14.3B active, 28 layers, 64K ctx
 // Source: https://huggingface.co/Qwen/Qwen2-57B-A14B/blob/main/config.json
 export default {
   id: 'qwen2_57b_a14b',

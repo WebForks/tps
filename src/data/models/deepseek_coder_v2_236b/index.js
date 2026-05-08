@@ -1,4 +1,4 @@
-// DeepSeek-Coder-V2 236B: MoE, 236B total / 21B active, 60 layers, 338 languages, 128K ctx
+﻿// DeepSeek-Coder-V2 236B: MoE, 236B total / 21B active, 60 layers, 338 languages, 128K ctx
 // Source: https://huggingface.co/deepseek-ai/DeepSeek-Coder-V2-Instruct
 export default {
   id: 'deepseek_coder_v2_236b',
@@ -9,6 +9,7 @@ export default {
   active_params: 21,
   experts: 160,
   experts_per_token: 6,
+  moe_execution: 'shared_routed',
   layers: 60,
   kv_heads: 128,
   head_dim: 128,

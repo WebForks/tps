@@ -1,4 +1,4 @@
-// Dolphin 2.6 Mixtral 8x7B: uncensored fine-tune of Mixtral
+﻿// Dolphin 2.6 Mixtral 8x7B: uncensored fine-tune of Mixtral
 // Released: January 2024
 // Source: https://huggingface.co/cognitivecomputations/dolphin-2.6-mixtral-8x7b
 export default {

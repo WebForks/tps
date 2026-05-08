@@ -1,4 +1,4 @@
-// Qwen3.5-397B-A17B: MoE, 60 layers (45 GatedDeltaNet linear + 15 full attention), 512 experts / 10 active, hybrid attention, 256K ctx
+﻿// Qwen3.5-397B-A17B: MoE, 60 layers (45 GatedDeltaNet linear + 15 full attention), 512 experts / 10 active, hybrid attention, 256K ctx
 // Source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B/blob/main/config.json
 export default {
   id: 'qwen35_397b_a17b',

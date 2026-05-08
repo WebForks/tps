@@ -1,4 +1,4 @@
-// Kimi K2.6: 1T MoE, 32B active, MLA attention, 256K context
+﻿// Kimi K2.6: 1T MoE, 32B active, MLA attention, 256K context
 // Released: April 2026
 // Source: https://huggingface.co/moonshotai/Kimi-K2.6
 export default {

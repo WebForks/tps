@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   id: 'deepseek_v2',
   released: '2024-05',
   name: 'DeepSeek V2',
@@ -7,6 +7,7 @@ export default {
   active_params: 21,
   experts: 160,
   experts_per_token: 6,
+  moe_execution: 'shared_routed',
   mla_ratio: 0.18,
   layers: 60,
   kv_heads: 128,

@@ -1,4 +1,4 @@
-// Yuan 2.0 51B: IEIT's large MoE model
+﻿// Yuan 2.0 51B: IEIT's large MoE model
 // Released: February 2024
 // Source: https://huggingface.co/IEITYuan/Yuan2-51B-hf
 export default {

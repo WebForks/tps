@@ -1,4 +1,4 @@
-// Phi-3.5 MoE 41.9B (6.6B active): 32 layers, GQA (32 heads / 8 KV heads), 16 experts (2 active), 128K ctx
+﻿// Phi-3.5 MoE 41.9B (6.6B active): 32 layers, GQA (32 heads / 8 KV heads), 16 experts (2 active), 128K ctx
 // Source: https://huggingface.co/microsoft/Phi-3.5-MoE-instruct/blob/main/config.json
 export default {
   id: 'phi3_5_moe',

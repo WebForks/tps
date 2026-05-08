@@ -1,4 +1,4 @@
-// Nous Hermes 2 Mixtral 8x7B: fine-tuned Mixtral with diverse dataset
+﻿// Nous Hermes 2 Mixtral 8x7B: fine-tuned Mixtral with diverse dataset
 // Released: January 2024
 // Source: https://huggingface.co/NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO
 export default {

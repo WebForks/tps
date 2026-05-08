@@ -1,4 +1,4 @@
-// DeepSeek-MoE-16B: MoE 16.4B total / 2.8B active, 28 layers, 4K ctx
+﻿// DeepSeek-MoE-16B: MoE 16.4B total / 2.8B active, 28 layers, 4K ctx
 // First-gen DeepSeek MoE using fine-grained expert architecture
 // Source: https://huggingface.co/deepseek-ai/deepseek-moe-16b-chat/blob/main/config.json
 export default {
@@ -10,6 +10,7 @@ export default {
   active_params: 2.8,
   experts: 64,
   experts_per_token: 6,
+  moe_execution: 'shared_routed',
   mla_ratio: null,
   layers: 28,
   kv_heads: 16,

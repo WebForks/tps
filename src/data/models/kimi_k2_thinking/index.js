@@ -1,4 +1,4 @@
-// Kimi K2 Thinking: 基于K2的推理版本，同架构，上下文扩展至256K
+﻿// Kimi K2 Thinking: 基于K2的推理版本，同架构，上下文扩展至256K
 // MoE + MLA, 61层, 384路由专家 top-8, 1T总参数, 32B激活
 // Source: https://huggingface.co/moonshotai/Kimi-K2-Thinking/blob/main/config.json
 export default {

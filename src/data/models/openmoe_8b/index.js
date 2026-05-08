@@ -1,4 +1,4 @@
-// OpenMoE 8B: Open-source MoE research model
+﻿// OpenMoE 8B: Open-source MoE research model
 // Source: https://huggingface.co/OrionZheng/openmoe-8b
 export default {
   id: 'openmoe_8b',

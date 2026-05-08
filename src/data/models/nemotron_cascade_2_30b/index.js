@@ -1,4 +1,4 @@
-// Nemotron-Cascade 2: 30B MoE with 3B active parameters
+﻿// Nemotron-Cascade 2: 30B MoE with 3B active parameters
 // Source: https://research.nvidia.com/labs/nemotron/nemotron-cascade-2/
 export default {
   id: 'nemotron_cascade_2_30b',

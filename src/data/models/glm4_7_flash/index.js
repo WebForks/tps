@@ -1,4 +1,4 @@
-// GLM-4.7-Flash: 30B MoE with 3B active, lightweight deployment
+﻿// GLM-4.7-Flash: 30B MoE with 3B active, lightweight deployment
 // Source: https://huggingface.co/zai-org/GLM-4.7-Flash
 export default {
   id: 'glm4_7_flash',

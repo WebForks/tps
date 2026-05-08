@@ -1,4 +1,4 @@
-// Jamba 52B: Hybrid Transformer-Mamba MoE, 12B active
+﻿// Jamba 52B: Hybrid Transformer-Mamba MoE, 12B active
 // Source: https://huggingface.co/ai21labs/Jamba-v0.1
 // 架构：每 4 层 1 个 Transformer（有 KV Cache）+ 3 个 Mamba（无 KV Cache）
 // 实际 KV Cache 层数 = 32 × 1/4 = 8 层，用 mamba_ratio 修正

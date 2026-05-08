@@ -9,6 +9,7 @@ export default {
   active_params: 37,
   experts: 256,
   experts_per_token: 8,
+  moe_execution: 'shared_routed',
   mla_ratio: 0.18,
   layers: 61,
   kv_heads: 128,

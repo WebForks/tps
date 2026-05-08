@@ -1,4 +1,4 @@
-// OpenMoE 34B: Open-source MoE research model
+﻿// OpenMoE 34B: Open-source MoE research model
 // Source: https://github.com/XueFuzhao/OpenMoE
 export default {
   id: 'openmoe_34b',

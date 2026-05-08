@@ -1,4 +1,4 @@
-// Qwen3 235B MoE: 235B total / 22B active, 128 experts / 8 active, 94 layers
+﻿// Qwen3 235B MoE: 235B total / 22B active, 128 experts / 8 active, 94 layers
 // Released: April 2025
 // Source: https://huggingface.co/Qwen/Qwen3-235B-A22B
 export default {

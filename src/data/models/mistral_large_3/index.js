@@ -1,4 +1,4 @@
-// Mistral Large 3: 675B MoE with 41B active parameters
+﻿// Mistral Large 3: 675B MoE with 41B active parameters
 // Source: https://mistral.ai/news/mistral-3/
 export default {
   id: 'mistral_large_3',

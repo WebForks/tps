@@ -1,4 +1,4 @@
-// Qwen3.6 35B A3B: MoE, 35B total / 3B active, hybrid Gated DeltaNet(linear) + standard attention
+﻿// Qwen3.6 35B A3B: MoE, 35B total / 3B active, hybrid Gated DeltaNet(linear) + standard attention
 // full_attention_interval=4: 30 linear layers (no KV cache) + 10 full attention layers
 // Source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B/blob/main/config.json
 export default {

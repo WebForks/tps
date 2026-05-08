@@ -1,4 +1,4 @@
-// WizardLM 2 8x22B: large MoE model
+﻿// WizardLM 2 8x22B: large MoE model
 // Released: April 2024
 // Source: https://huggingface.co/microsoft/WizardLM-2-8x22B
 export default {

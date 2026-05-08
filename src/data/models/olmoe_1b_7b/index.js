@@ -1,4 +1,4 @@
-// OLMoE 1B-7B: MoE, 7B total / 1B active, fully open by Allen AI
+﻿// OLMoE 1B-7B: MoE, 7B total / 1B active, fully open by Allen AI
 // Source: https://huggingface.co/allenai/OLMoE-1B-7B-0924
 export default {
   id: 'olmoe_1b_7b',

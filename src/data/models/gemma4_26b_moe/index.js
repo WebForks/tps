@@ -11,6 +11,7 @@ export default {
   active_params: 3.8,
   experts: 128,
   experts_per_token: 8,
+  moe_execution: 'parallel_dense_routed',
   mla_ratio: null,
   layers: 30,
   kv_heads: 8,           // local (sliding) attention KV heads

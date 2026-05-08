@@ -1,4 +1,4 @@
-// GLM-5.1: 754B MoE, ~40B active, 256 experts (8 active), 200K context, GlmMoeDSA architecture
+﻿// GLM-5.1: 754B MoE, ~40B active, 256 experts (8 active), 200K context, GlmMoeDSA architecture
 // Released: March 2026
 // Source: https://huggingface.co/zai-org/GLM-5.1
 export default {

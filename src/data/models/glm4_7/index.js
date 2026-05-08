@@ -1,4 +1,4 @@
-// GLM-4.7: 355B MoE with 32B active, improved coding and reasoning
+﻿// GLM-4.7: 355B MoE with 32B active, improved coding and reasoning
 // Source: https://huggingface.co/zai-org/GLM-4.7
 export default {
   id: 'glm4_7',

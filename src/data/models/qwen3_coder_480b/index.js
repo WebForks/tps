@@ -1,4 +1,4 @@
-// Qwen3-Coder 480B: MoE, 480B total / 35B active, agentic coding model, 256K ctx
+﻿// Qwen3-Coder 480B: MoE, 480B total / 35B active, agentic coding model, 256K ctx
 // Source: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct
 export default {
   id: 'qwen3_coder_480b',

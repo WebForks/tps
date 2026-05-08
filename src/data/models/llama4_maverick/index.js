@@ -1,4 +1,4 @@
-// Llama 4 Maverick: 17Bx128E MoE, ~400B total, 1M context
+﻿// Llama 4 Maverick: 17Bx128E MoE, ~400B total, 1M context
 // Released: April 5, 2025
 // Source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E
 // iRoPE 混合注意力：每 4 层 1 个 global full-attention，其余为 local sliding window

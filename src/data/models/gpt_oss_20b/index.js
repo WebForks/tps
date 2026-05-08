@@ -1,4 +1,4 @@
-// gpt-oss-20b: MoE, 24 layers, 32 experts top-4, GQA 64Q/8KV, sliding_window=128 (every 2nd layer)
+﻿// gpt-oss-20b: MoE, 24 layers, 32 experts top-4, GQA 64Q/8KV, sliding_window=128 (every 2nd layer)
 // 21B total params, 3.6B active params
 // Source: https://huggingface.co/openai/gpt-oss-20b/blob/main/original/config.json
 export default {

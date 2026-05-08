@@ -1,4 +1,4 @@
-// Qwen3.5-122B-A10B: MoE, 48 layers (36 GatedDeltaNet linear + 12 full attention), 256 experts / 8 active, hybrid attention, 256K ctx
+﻿// Qwen3.5-122B-A10B: MoE, 48 layers (36 GatedDeltaNet linear + 12 full attention), 256 experts / 8 active, hybrid attention, 256K ctx
 // Source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B/blob/main/config.json
 export default {
   id: 'qwen35_122b_a10b',

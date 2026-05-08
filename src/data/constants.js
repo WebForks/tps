@@ -49,7 +49,23 @@ export const FRAMEWORK_MAP = [
   // ExLlamaV2 针对消费级显卡（RTX 系列）优化，CUDA 核高度定制
   { id: 'exllamav2',     labelKey: 'framework.exllamav2',     decode: 0.70, prefill: 0.55, decodeMin: 0.65, decodeMax: 0.75, prefillMin: 0.48, prefillMax: 0.62, vendors: ['nvidia'],             schedulingMode: 'serial'     },
   // Apple 专属框架
-  { id: 'mlx',           labelKey: 'framework.mlx',           decode: 0.90, prefill: 0.65, decodeMin: 0.80, decodeMax: 0.95, prefillMin: 0.55, prefillMax: 0.75, vendors: ['apple'], recommended: 'apple', schedulingMode: 'continuous' },
+  {
+    id: 'mlx',
+    labelKey: 'framework.mlx',
+    decode: 0.90,
+    prefill: 0.65,
+    decodeMin: 0.80,
+    decodeMax: 0.95,
+    prefillMin: 0.55,
+    prefillMax: 0.75,
+    vendors: ['apple'],
+    recommended: 'apple',
+    schedulingMode: 'continuous',
+    // Apple batch=1 下的大专家数 MoE 常被 expert dispatch / gather 的小块串行开销拖慢。
+    // 这里记录的是“每层每个 routed expert fragment 的额外延迟（微秒）”基准值，
+    // 由 calc.js 再按 experts、top-k、batch、执行形态缩放。
+    appleMoeDispatchUs: 60,
+  },
   {
     id: 'llamacpp_metal',
     labelKey: 'framework.llamacpp_metal',
@@ -59,6 +75,7 @@ export const FRAMEWORK_MAP = [
     prefillMin: 0.42, prefillMax: 0.58,
     vendors: ['apple'],
     schedulingMode: 'serial',
+    appleMoeDispatchUs: 25,
     // 模型规模效率缩放系数（Apple Metal 后端相比 CUDA 略高）
     modelSizeScaling: [
       { maxParams: 14, decode: 0.57, decodeMin: 0.52, decodeMax: 0.62 },  // <14B

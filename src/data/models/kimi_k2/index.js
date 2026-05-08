@@ -1,4 +1,4 @@
-// Kimi K2: MoE + MLA, 61层, 384路由专家 top-8 + 1共享专家, 1T总参数, 32B激活
+﻿// Kimi K2: MoE + MLA, 61层, 384路由专家 top-8 + 1共享专家, 1T总参数, 32B激活
 // MLA: kv_lora_rank=512, q_lora_rank=1536, v_head_dim=128
 // Source: https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/config.json
 export default {

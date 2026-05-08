@@ -1,4 +1,4 @@
-// MiniMax-M1-40k: 456B MoE, 45.9B active, reasoning model, Lightning+Softmax hybrid attention
+﻿// MiniMax-M1-40k: 456B MoE, 45.9B active, reasoning model, Lightning+Softmax hybrid attention
 // Released: May 2025
 // Source: https://huggingface.co/MiniMaxAI/MiniMax-M1-40k
 export default {

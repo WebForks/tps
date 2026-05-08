@@ -1,4 +1,4 @@
-// GPT-4o: Multimodal model with optimized inference
+﻿// GPT-4o: Multimodal model with optimized inference
 // Parameters estimated from community reverse engineering
 // Source: Community analysis and API behavior patterns
 export default {

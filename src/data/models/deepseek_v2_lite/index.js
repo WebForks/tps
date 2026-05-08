@@ -1,4 +1,4 @@
-// DeepSeek V2 Lite: MoE with MLA, 16B total / 2.4B active, 27 layers, 32K ctx
+﻿// DeepSeek V2 Lite: MoE with MLA, 16B total / 2.4B active, 27 layers, 32K ctx
 // Source: https://huggingface.co/deepseek-ai/DeepSeek-V2-Lite/blob/main/config.json
 export default {
   id: 'deepseek_v2_lite',
@@ -9,6 +9,7 @@ export default {
   active_params: 2.4,
   experts: 64,
   experts_per_token: 6,
+  moe_execution: 'shared_routed',
   mla_ratio: 0.18,
   layers: 27,
   kv_heads: 64,

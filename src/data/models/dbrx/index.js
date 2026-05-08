@@ -1,4 +1,4 @@
-// DBRX: MoE, 40 layers, GQA (48 heads / 8 KV heads), 16 experts (4 active), 32K ctx
+﻿// DBRX: MoE, 40 layers, GQA (48 heads / 8 KV heads), 16 experts (4 active), 32K ctx
 // Source: https://huggingface.co/databricks/dbrx-instruct/blob/main/config.json
 export default {
   id: 'dbrx',

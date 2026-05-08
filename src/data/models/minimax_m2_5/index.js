@@ -1,4 +1,4 @@
-// MiniMax-M2.5: 230B MoE, 10B active, 62 layers, 256 experts (8 active), 200K context
+﻿// MiniMax-M2.5: 230B MoE, 10B active, 62 layers, 256 experts (8 active), 200K context
 // Released: February 2026
 // Source: https://huggingface.co/MiniMaxAI/MiniMax-M2.5
 export default {

@@ -1,4 +1,4 @@
-// Kimi K2.5: 原生多模态版本，基于K2-Base继续预训练，约15T混合视觉+文本token
+﻿// Kimi K2.5: 原生多模态版本，基于K2-Base继续预训练，约15T混合视觉+文本token
 // MoE + MLA, 61层, 384路由专家 top-8, 1.04T总参数, 32B激活, 256K上下文
 // Source: https://huggingface.co/moonshotai/Kimi-K2.5/blob/main/config.json
 export default {

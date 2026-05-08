@@ -1,4 +1,4 @@
-// Jamba 1.5 Large: Hybrid Transformer-Mamba MoE, 94B active, 256K context
+﻿// Jamba 1.5 Large: Hybrid Transformer-Mamba MoE, 94B active, 256K context
 // Source: https://huggingface.co/ai21labs/AI21-Jamba-Large-1.5
 // 架构：每 4 层 1 个 Transformer（有 KV Cache）+ 3 个 Mamba（无 KV Cache）
 // 实际 KV Cache 层数 = 64 × 1/4 = 16 层，用 mamba_ratio 修正

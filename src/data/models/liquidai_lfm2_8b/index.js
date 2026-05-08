@@ -1,4 +1,4 @@
-// LiquidAI LFM2 8B: MoE with 1.5B active, optimized for on-device
+﻿// LiquidAI LFM2 8B: MoE with 1.5B active, optimized for on-device
 // Source: https://huggingface.co/LiquidAI/LFM2-8B-A1B
 export default {
   id: 'liquidai_lfm2_8b',

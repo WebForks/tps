@@ -1,4 +1,4 @@
-// xAI Grok-1: MoE 314B total / 86B active, 64 layers, 8K ctx
+﻿// xAI Grok-1: MoE 314B total / 86B active, 64 layers, 8K ctx
 // 8 experts per layer, top-2 routing; open-sourced March 2024
 // Source: https://github.com/xai-org/grok-1/blob/main/model.py
 export default {

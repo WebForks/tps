@@ -1,4 +1,4 @@
-// Llama 4 Scout: 17Bx16E MoE, 109B total, 10M context
+﻿// Llama 4 Scout: 17Bx16E MoE, 109B total, 10M context
 // Released: April 5, 2025
 // Source: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E
 // iRoPE 混合注意力：每 4 层 1 个 global full-attention，其余为 local sliding window
