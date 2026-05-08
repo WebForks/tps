@@ -169,7 +169,7 @@ export default {
     pcie_bw: 'PCIe 带宽',
     pcie_bw_tip: 'CPU Offload 模式下 Expert 权重的传输带宽，取决于主板插槽规格。PCIe 4.0 为当前主流。',
     pcie_width: 'PCIe 插槽宽度',
-    pcie_width_tip: 'GPU 插槽的物理通道数。台式机主槽单卡通常是 x16，多卡展卡或前置插槽可能降为 x8/x4。宽度每减半，实际 PCIe 带宽就减半。', 
+    pcie_width_tip: 'GPU 插槽的物理通道数。台式机主槽单卡通常是 x16，多卡展卡或前置插槽可能降为 x8/x4。宽度每减半，实际 PCIe 带宽就减半。',
     compute_mode: '计算模式',
     compute_mode_gpu: 'GPU',
     compute_mode_offload: 'GPU + CPU 卸载',
