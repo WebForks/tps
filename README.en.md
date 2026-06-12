@@ -59,7 +59,7 @@
 | --- | --- |
 | **Models** | 351+ mainstream models (Dense 280 + MoE 71) · 0.5B - 671B parameters · 2022-2026 releases |
 | **Architectures** | Dense · MoE · MLA (DeepSeek) · Hybrid Attention (Gemma) · Mamba (SSM) |
-| **GPUs** | 170+ models · NVIDIA (RTX/Tesla/H100) · AMD (RX/MI) · Intel Arc · Apple Silicon · Domestic chips |
+| **GPUs** | 170+ models · NVIDIA (RTX/Tesla/H100/B200/B300) · AMD (RX/MI) · Intel Arc · Apple Silicon · Domestic chips |
 | **Quantization** | FP32 · BF16 · FP8 · INT8 · INT4 · Q6_K · Q5_K · Q3_K · INT2 |
 | **Frameworks** | vLLM · TensorRT-LLM · SGLang · LMDeploy · TGI · llama.cpp · ExLlamaV2 · MLX |
 | **Advanced** | Flash Attention · KV Cache Quantization · Prefix Cache · MoE CPU Offload |

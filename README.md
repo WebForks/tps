@@ -59,7 +59,7 @@
 | --- | --- |
 | **模型** | 351+ 主流模型（Dense 280 + MoE 71）· 0.5B - 671B 参数 · 2022-2026 年发布 |
 | **架构** | Dense · MoE · MLA (DeepSeek) · 混合注意力 (Gemma) · Mamba (SSM) |
-| **GPU** | 170+ 型号 · NVIDIA (RTX/Tesla/H100) · AMD (RX/MI) · Intel Arc · Apple Silicon · 国产芯片 |
+| **GPU** | 170+ 型号 · NVIDIA (RTX/Tesla/H100/B200/B300) · AMD (RX/MI) · Intel Arc · Apple Silicon · 国产芯片 |
 | **量化** | FP32 · BF16 · FP8 · INT8 · INT4 · Q6_K · Q5_K · Q3_K · INT2 |
 | **框架** | vLLM · TensorRT-LLM · SGLang · LMDeploy · TGI · llama.cpp · ExLlamaV2 · MLX |
 | **高级特性** | Flash Attention · KV Cache 量化 · Prefix Cache · MoE CPU Offload |

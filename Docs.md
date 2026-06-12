@@ -67,13 +67,15 @@
 
 | 厂商 | 系列 |
 |------|------|
-| NVIDIA | RTX 20/30/40/50 系、Tesla V100、A100、H100/H200、GB200 |
+| NVIDIA | RTX 20/30/40/50 系、Tesla V100、A100、H100/H200、B200/B300 SXM、HGX B300 (8×)、GB200/GB300 NVL72 |
 | AMD | RX 5000/6000/7000/9000、MI50/60/100/200/300 系 |
 | Intel | Arc A/B 系、Gaudi 2/3 |
 | Apple | M1/M2/M3/M4/M5（含 Pro/Max/Ultra 各配置） |
 | 国产 | 华为昇腾 910B/C/D/E、壁仞 BR100、寒武纪 MLU370、摩尔线程 S4000 |
 
 GPU 字段支持 bwUtilization（实际带宽利用率，默认 0.80）和 usableRatio（可用显存比例）。
+
+**默认配置**：RTX 4090 × 1 · BF16 · 16K ctx · Gemma 4 12B Unified（`src/pages/Estimator.vue`）。
 
 ---
 
