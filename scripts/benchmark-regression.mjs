@@ -12,6 +12,9 @@ const model70b = ALL_MODELS.find(m => m.id === 'llama3_3_70b')
 const int4 = QUANT_MAP.find(q => q.id === 'int4')
 const bf16 = QUANT_MAP.find(q => q.id === 'bf16')
 const mlx = FRAMEWORK_MAP.find(f => f.id === 'mlx')
+const metal = FRAMEWORK_MAP.find(f => f.id === 'llamacpp_metal')
+const llama = FRAMEWORK_MAP.find(f => f.id === 'llamacpp')
+const mixtral = ALL_MODELS.find(m => m.id === 'mixtral_8x7b')
 const vllm = FRAMEWORK_MAP.find(f => f.id === 'vllm')
 const ic = INTERCONNECT_MAP[0]
 
@@ -22,6 +25,10 @@ const CASES = [
   { label: 'M3 Max 64G MLX 8B', gpu: 'apple_m3_max_64g', model: model8b, quant: int4, fw: mlx, batch: 1, real: 50 },
   { label: 'M3 Pro 36G MLX 8B', gpu: 'apple_m3_pro_36g', model: model8b, quant: int4, fw: mlx, batch: 1, real: 35 },
   { label: 'M1 Max 32G MLX 8B', gpu: 'apple_m1_max_32g', model: model8b, quant: int4, fw: mlx, batch: 1, real: 38 },
+  { label: 'M4 16G metal 8B', gpu: 'apple_m4_16g', model: model8b, quant: int4, fw: metal, batch: 1, real: 22.5 },
+  { label: 'M4 Pro metal 8B', gpu: 'apple_m4_pro_48g', model: model8b, quant: int4, fw: metal, batch: 1, real: 77 },
+  { label: 'M4 Pro Mixtral MLX', gpu: 'apple_m4_pro_48g', model: mixtral, quant: int4, fw: mlx, batch: 1, real: 45 },
+  { label: '4090 llama.cpp INT4 b1', gpu: 'rtx4090', model: model8b, quant: int4, fw: llama, batch: 1, real: 127 },
   { label: 'M4 Max 36G MLX 8B', gpu: 'apple_m4_max_36g', model: model8b, quant: int4, fw: mlx, batch: 1, real: 138 },
   { label: 'M2 Max 32G MLX 8B', gpu: 'apple_m2_max_32g', model: model8b, quant: int4, fw: mlx, batch: 1, real: 45 },
   { label: '4090 INT4 vLLM b1', gpu: 'rtx4090', model: model8b, quant: int4, fw: vllm, batch: 1, real: 125 },

@@ -61,6 +61,9 @@
 | 平台 | 主要修正项 |
 |------|-----------|
 | Apple MLX | `weightReadRatio` 按代际/芯片分级、`decodeBwScale` 按 SKU、`gguf_bytes`、MoE dispatch 降权 |
+| Apple metal | 跳过 CUDA 向 `modelSizeScaling`；decode 按 MLX 实测比值（约 74–83%）校准 |
+| NVIDIA llama.cpp | 小模型 decode 下限 0.76（Q4_K_M 4090 实测 ~127 tok/s） |
+| Apple MLX MoE | 权重读取比例 ×1.22（expert 碎片化） |
 | NVIDIA BF16 | 小模型 decode 权重读取比例 ~0.34（L2/kernel fusion） |
 | 高 batch | `getBatchSchedulingEfficiency` 抑制聚合吞吐虚高 |
 | INT4 prefill | 走 BF16 算力而非 INT4 Tensor Core 峰值 |

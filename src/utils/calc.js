@@ -46,11 +46,10 @@ export function calcAll({
   const effectivePromptLen = Math.max(1, Math.round(promptLen * (1 - prefixHitRatio)))
   const avgDecodeSeqLen = Math.max(1, Math.min(ctx, promptLen + Math.round(outputLen / 2)))
 
-  // 框架效率按模型规模动态调整（如果配置了 modelSizeScaling）
+  // 框架效率按模型规模动态调整（CUDA llama.cpp 等；Apple 走独立校准路径）
   let adjustedFramework = framework
-  if (framework.modelSizeScaling && Array.isArray(framework.modelSizeScaling)) {
+  if (framework.modelSizeScaling && Array.isArray(framework.modelSizeScaling) && gpu.vendor !== 'apple') {
     const params = model.params
-    // 找到匹配的规模区间
     const scaling = framework.modelSizeScaling.find(s => params < s.maxParams)
     if (scaling) {
       adjustedFramework = {
@@ -61,6 +60,16 @@ export function calcAll({
       }
     }
   }
+  // NVIDIA 消费级 + llama.cpp：小模型 CUDA kernel 效率高于通用 0.52 系数
+  if (gpu.vendor === 'nvidia' && framework.id === 'llamacpp' && model.params < 15) {
+    adjustedFramework = {
+      ...adjustedFramework,
+      decode: Math.max(adjustedFramework.decode, 0.76),
+      decodeMin: Math.max(adjustedFramework.decodeMin ?? 0, 0.70),
+      decodeMax: Math.max(adjustedFramework.decodeMax ?? 0, 0.84),
+    }
+  }
+  adjustedFramework = applyAppleFrameworkAdjustments(gpu, framework, adjustedFramework)
 
   // ─────────────────────────────────────────────
   // MoE non-expert 参数预计算（EP / CPU Offload 共用）
@@ -187,7 +196,14 @@ export function calcAll({
     : model.type === 'moe'
       ? model.active_params * quantBytes
       : weightGB
-  const decodeWeightReadRatio = getDecodeWeightReadRatio(gpu, quant, model, framework)
+  const decodeWeightReadRatio = (() => {
+    let ratio = getDecodeWeightReadRatio(gpu, quant, model, framework)
+    // Apple MLX MoE：expert 碎片化使有效权重大于 active_params 估算
+    if (gpu.vendor === 'apple' && model.type === 'moe' && framework?.id === 'mlx') {
+      ratio = Math.min(0.95, ratio * 1.22)
+    }
+    return ratio
+  })()
   const activeWeight = activeWeightRaw * decodeWeightReadRatio
 
   const decodeFactors = getDecodeFactors({ framework: adjustedFramework })
@@ -655,12 +671,13 @@ function getDecodeWeightReadRatio(gpu, quant, model, framework) {
 
   if (gpu?.vendor === 'apple') {
     const isM4M5 = /apple_m[45]/.test(chipId)
+    const useMlxLike = framework?.id === 'mlx' || framework?.id === 'llamacpp_metal'
+    if (isM4M5 && useMlxLike) {
+      if (/_(max|ultra)_/.test(chipId)) return isGgufQuant ? 0.52 : 0.70
+      if (/_pro_/.test(chipId)) return isGgufQuant ? 0.44 : 0.66
+      return isGgufQuant ? 0.62 : 0.68
+    }
     if (isM4M5) {
-      if (framework?.id === 'mlx') {
-        if (/_(max|ultra)_/.test(chipId)) return isGgufQuant ? 0.52 : 0.70
-        if (/_pro_/.test(chipId)) return isGgufQuant ? 0.44 : 0.66
-        return isGgufQuant ? 0.62 : 0.68
-      }
       if (/_(max|ultra)_/.test(chipId)) return isGgufQuant ? 0.60 : 0.78
       if (/_pro_/.test(chipId)) return isGgufQuant ? 0.52 : 0.72
       return isGgufQuant ? 0.70 : 0.78
@@ -688,7 +705,7 @@ function getAppleDecodeBwScale(gpu) {
   if (/apple_m3/.test(id)) return 0.76
   if (/apple_m2/.test(id)) return 0.58
   if (/apple_m1/.test(id)) {
-    if (/_max_/.test(id)) return 0.44
+    if (/_max_/.test(id)) return 0.49
     if (/_pro_/.test(id)) return 0.63
     return 1.0
   }
@@ -713,6 +730,22 @@ function getDecodeFactors({ framework }) {
     mid: framework.decode,
     min: framework.decodeMin ?? framework.decode,
     max: framework.decodeMax ?? framework.decode,
+  }
+}
+
+/** Apple llama.cpp metal：按芯片档位对齐 MLX 实测比值（metal ≈ 74–83% MLX） */
+function applyAppleFrameworkAdjustments(gpu, framework, adjustedFramework) {
+  if (gpu?.vendor !== 'apple' || framework?.id !== 'llamacpp_metal') return adjustedFramework
+  const chipId = gpu.id ?? ''
+  const vsMlx = /_(max|ultra)_/.test(chipId) ? 0.74
+    : /_pro_/.test(chipId) ? 0.83
+    : 0.795
+  const targetDecode = 0.90 * vsMlx
+  return {
+    ...adjustedFramework,
+    decode: targetDecode,
+    decodeMin: targetDecode * 0.90,
+    decodeMax: Math.min(0.92, targetDecode * 1.08),
   }
 }
 
