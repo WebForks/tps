@@ -2,7 +2,11 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const configuredBase = process.env.VITE_BASE_PATH || '/'
+const base = configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`
+
 export default defineConfig({
+  base,
   plugins: [
     vue(),
     VitePWA({
@@ -17,29 +21,29 @@ export default defineConfig({
         background_color: '#f9fafb',
         display: 'standalone',
         orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
+        scope: base,
+        start_url: base,
         icons: [
           {
-            src: '/pwa-192x192.png',
+            src: `${base}pwa-192x192.png`,
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/pwa-512x512.png',
+            src: `${base}pwa-512x512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/pwa-maskable-192x192.png',
+            src: `${base}pwa-maskable-192x192.png`,
             sizes: '192x192',
             type: 'image/png',
             purpose: 'maskable'
           },
           {
-            src: '/pwa-maskable-512x512.png',
+            src: `${base}pwa-maskable-512x512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'

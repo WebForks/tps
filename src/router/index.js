@@ -5,7 +5,7 @@ import Ranking from '../pages/Ranking.vue'
 import Solver from '../pages/Solver.vue'
 
 export default createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/',          component: Estimator },
     { path: '/supported', redirect: '/library' },
