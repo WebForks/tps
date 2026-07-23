@@ -9,6 +9,8 @@ defineProps({
   ctx: Number, batch: Number, promptLen: Number, outputLen: Number,
   flashAttention: Boolean, kvCacheQuant: Object,
   prefixCacheHit: Number, cpuOffload: Boolean, pcieBw: Object,
+  pcieWidth: Object, pureCpu: Boolean, cpuMemBw: Object,
+  cpuTflops: Number, gpuMemoryUtilization: Number, sysRam: Number,
 })
 </script>
 
@@ -30,6 +32,12 @@ defineProps({
     :prefix-cache-hit="prefixCacheHit"
     :cpu-offload="cpuOffload"
     :pcie-bw="pcieBw"
+    :pcie-width="pcieWidth"
+    :pure-cpu="pureCpu"
+    :cpu-mem-bw="cpuMemBw"
+    :cpu-tflops="cpuTflops"
+    :gpu-memory-utilization="gpuMemoryUtilization"
+    :sys-ram="sysRam"
   />
   <Footer />
 </template>

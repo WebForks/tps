@@ -16,6 +16,9 @@ export default {
   hidden_size: 8192,
   max_ctx: 128000,
   tags: ['chat'],
+  localInference: false,
+  availability: 'api-only',
+  parameterEstimate: true,
   links: {
     ollama: null,
     hf: null,

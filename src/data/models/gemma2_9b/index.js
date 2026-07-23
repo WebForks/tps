@@ -9,6 +9,7 @@ export default {
   params: 9,
   layers: 42,
   kv_heads: 8,
+  query_heads: 16,
   head_dim: 256,
   local_layers: 21,      // sliding window layer count
   sliding_window: 4096,  // local attention window size (tokens)

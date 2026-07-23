@@ -11,6 +11,13 @@ export default {
   experts_per_token: 8,
   layers: 40,
   linear_attention_layers: 30,  // GatedDeltaNet，不支持 Flash Attention
+  query_heads: 16,
+  linear_num_key_heads: 16,
+  linear_num_value_heads: 32,
+  linear_key_head_dim: 128,
+  linear_value_head_dim: 128,
+  linear_conv_kernel_dim: 4,
+  linear_state_bytes: 4,
   kv_heads: 2,
   head_dim: 256,
   hidden_size: 2048,

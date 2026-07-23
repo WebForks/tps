@@ -33,8 +33,6 @@ pnpm-debug.log*
 # 缓存
 .cache/
 .parcel-cache/
-package-lock.json
-
 .kiro
 
 .claude

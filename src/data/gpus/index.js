@@ -1,6 +1,7 @@
 // src/data/gpus/index.js
 import apple            from './apple/index.js'
 import nvidia_datacenter from './nvidia/datacenter.js'
+import nvidia_modded      from './nvidia/modded.js'
 import nvidia_rtx50      from './nvidia/rtx50.js'
 import nvidia_rtx40      from './nvidia/rtx40.js'
 import nvidia_rtx30      from './nvidia/rtx30.js'
@@ -22,11 +23,22 @@ import intel_arc         from './intel/arc.js'
 import intel_integrated  from './intel/integrated.js'
 import domestic          from './domestic/index.js'
 
+// Apple publishes GPU core counts and memory bandwidth, but not BF16/INT8
+// throughput or chip TDP. Keep those useful estimator inputs explicitly
+// marked as derived so the UI/result confidence can disclose the limitation.
+const appleWithMetadata = apple.map(gpu => ({
+  ...gpu,
+  computeEstimate: true,
+  tdpEstimate: true,
+  specConfidence: gpu.specConfidence ?? 'derived',
+}))
+
 export const GPU_LIST = [
-  ...apple,
+  ...appleWithMetadata,
   ...nvidia_datacenter,
   ...nvidia_rtx50,
   ...nvidia_dgx,
+  ...nvidia_modded,
   ...nvidia_rtx40,
   ...nvidia_rtx30,
   ...nvidia_rtx20,

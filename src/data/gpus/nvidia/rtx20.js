@@ -1,7 +1,11 @@
 // RTX 20 系列（Turing，2018-2020）
 // 数据来源：NVIDIA 官方规格 / TechPowerUp
+// RTX 2080 Ti Tensor throughput:
+// https://developer.nvidia.com/blog/nvidia-turing-architecture-in-depth/
 export default [
-  { id: 'rtx2080ti',   name: 'RTX 2080 Ti',    vendor: 'nvidia', tier: 'consumer', released: '2018-09', vram: 11, bw: 616, bwUtilization: 0.80, bf16: 27, int8: 54,  int4: null, nvlink_bw: null, tdp: 250 },
+  // Turing has no native BF16. The combined BF16/FP16 estimator therefore
+  // uses the FE's FP16 Tensor rate with FP32 accumulation (56.9 TFLOPS).
+  { id: 'rtx2080ti',   name: 'RTX 2080 Ti',    vendor: 'nvidia', tier: 'consumer', released: '2018-09', vram: 11, bw: 616, bwUtilization: 0.80, bf16: 56.9, int8: 227.7, int4: 455.4, nvlink_bw: null, tdp: 260, nativeBf16: false, fp16EquivalentTflops: 56.9 },
   { id: 'rtx2080s',    name: 'RTX 2080 SUPER', vendor: 'nvidia', tier: 'consumer', released: '2019-07', vram: 8,  bw: 496, bwUtilization: 0.80, bf16: 22, int8: 44,  int4: null, nvlink_bw: null, tdp: 250 },
   { id: 'rtx2080',     name: 'RTX 2080',       vendor: 'nvidia', tier: 'consumer', released: '2018-09', vram: 8,  bw: 448, bwUtilization: 0.80, bf16: 20, int8: 41,  int4: null, nvlink_bw: null, tdp: 215 },
   { id: 'rtx2070s',    name: 'RTX 2070 SUPER', vendor: 'nvidia', tier: 'consumer', released: '2019-07', vram: 8,  bw: 448, bwUtilization: 0.80, bf16: 18, int8: 37,  int4: null, nvlink_bw: null, tdp: 215 },

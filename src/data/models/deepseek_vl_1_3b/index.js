@@ -15,6 +15,7 @@ export default {
   tags: ['multilingual', 'vision'],
   // Vision encoder: SigLIP-L/14 ~0.3B params, 576 patch tokens per image
   vision_encoder_params: 0.3,
+  params_scope: 'total',
   vision_seq_tokens: 576,
   links: {
     hf: 'https://huggingface.co/deepseek-ai/deepseek-vl-1.3b-base',

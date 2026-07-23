@@ -4,12 +4,25 @@ import { useI18n } from 'vue-i18n'
 import { fmtToks, fmtToksRange, fmtPct, fmtGB } from '../../utils/format.js'
 import { FRAMEWORK_MAP } from '../../data/constants.js'
 import TipIcon from '../ui/TipIcon.vue'
-import { generateCmd, getFrameworkDocsUrl } from '../../utils/cmdGen.js'
+import {
+  generateCmd,
+  getCommandCompatibility,
+  getFrameworkDocsUrl,
+} from '../../utils/cmdGen.js'
+import {
+  getDefaultGpuMemoryUtilization,
+  getRuntimeCompatibility,
+  getRuntimeCompatibilityMessage,
+  normalizeGpuMemoryUtilization,
+  usesFp16ForCombinedPrecision,
+} from '../../utils/runtime.js'
 
 const { t } = useI18n()
 const props = defineProps({
   result: Object,
   gpuVendor: String,
+  gpu: Object,
+  gpuMemoryUtilization: { type: Number, default: null },
   readonly: Boolean,
   // 命令生成新增
   model:               Object,
@@ -18,6 +31,8 @@ const props = defineProps({
   epCount:             { type: Number, default: 1 },
   ctx:                 Number,
   batch:               Number,
+  promptLen:           Number,
+  outputLen:           Number,
   quant:               Object,
   kvCacheQuant:        Object,
   prefixCacheHit:      { type: Number, default: 0 },
@@ -30,7 +45,7 @@ const props = defineProps({
 const framework = defineModel('framework', { required: true })
 
 const speedRating = computed(() => {
-  const toks = props.result?.singleToksMax
+  const toks = props.result?.singleToks
   if (toks == null) return null
   if (toks >= 100) return { grade: 'S', c1: '#22c55e', c2: '#15803d', label: t('result.speed_rating_blazing'), desc: t('result.speed_rating_s_desc') }
   if (toks >= 60)  return { grade: 'A', c1: '#60a5fa', c2: '#2563eb', label: t('result.speed_rating_blazing'), desc: t('result.speed_rating_blazing_desc') }
@@ -40,29 +55,17 @@ const speedRating = computed(() => {
 })
 
 // 根据当前 GPU vendor 过滤可用框架
-const availableFrameworks = computed(() => {
-  const vendor = props.gpuVendor
-  return FRAMEWORK_MAP.map(f => {
-    const available = !f.vendors || f.vendors.includes(vendor)
-    const recommended = f.recommended === vendor
-    return { ...f, available, recommended }
-  })
-})
-
-function fmtFrameworkRange(min, max) {
-  const lo = (min * 100).toFixed(0)
-  const hi = (max * 100).toFixed(0)
-  return lo === hi ? `${lo}%` : `${lo}-${hi}%`
-}
-
-const generatedCmd = computed(() =>
-  generateCmd(framework.value, {
+function runtimeConfigFor(selectedFramework) {
+  return {
     model: props.model,
-    gpuCount: props.gpuCount,
+    gpu: props.gpu,
+    gpuCount: props.result?.tpCount ?? props.gpuCount,
     ppCount: props.ppCount,
     epCount: props.epCount,
     ctx: props.ctx,
     batch: props.batch,
+    promptLen: props.promptLen,
+    outputLen: props.outputLen,
     quant: props.quant,
     kvCacheQuant: props.kvCacheQuant,
     prefixCacheHit: props.prefixCacheHit,
@@ -71,7 +74,79 @@ const generatedCmd = computed(() =>
     cpuOffload: props.cpuOffload,
     pureCpu: props.pureCpu,
     nglCount: props.nglCount,
+    gpuMemoryUtilization: normalizeGpuMemoryUtilization(
+      props.gpuMemoryUtilization ?? props.result?.gpuMemoryUtilization,
+      getDefaultGpuMemoryUtilization(selectedFramework, props.gpu),
+    ),
+  }
+}
+
+const availableFrameworks = computed(() => {
+  const vendor = props.gpuVendor
+  return FRAMEWORK_MAP.map(f => {
+    const vendorAvailable = !f.vendors || f.vendors.includes(vendor)
+    const compatibility = getRuntimeCompatibility({
+      framework: f,
+      ...runtimeConfigFor(f),
+    })
+    const available = vendorAvailable && compatibility.supported
+    const recommended = f.recommended === vendor
+    return {
+      ...f,
+      available,
+      recommended,
+      unavailableMessage: vendorAvailable
+        ? getRuntimeCompatibilityMessage(compatibility)
+        : t('run.framework_unavailable', { vendor }),
+    }
   })
+})
+
+const effectiveThroughputMin = computed(() =>
+  props.result?.effectiveToksMin ?? props.result?.decodeToksMin ?? 0
+)
+
+const effectiveThroughputMax = computed(() =>
+  props.result?.effectiveToksMax ?? props.result?.decodeToksMax ?? 0
+)
+
+const effectiveTpot = computed(() => {
+  const reportedValue = props.result?.effectiveTpot
+  const reported = Number(reportedValue)
+  if (reportedValue != null && Number.isFinite(reported) && reported >= 0) return reported
+
+  const singleToks = Number(props.result?.singleToks)
+  if (Number.isFinite(singleToks) && singleToks > 0) return 1000 / singleToks
+  return 0
+})
+
+const bandwidthUtilizationPct = computed(() => {
+  const throughput = Number(props.result?.effectiveToks ?? props.result?.decodeToks)
+  const ceiling = Number(props.result?.bwLimit)
+  if (!Number.isFinite(throughput) || !Number.isFinite(ceiling) || ceiling <= 0) return 0
+  return Math.max(0, throughput / ceiling * 100)
+})
+
+function fmtFrameworkRange(min, max) {
+  const lo = (min * 100).toFixed(0)
+  const hi = (max * 100).toFixed(0)
+  return lo === hi ? `${lo}%` : `${lo}-${hi}%`
+}
+
+const commandConfig = computed(() => runtimeConfigFor(framework.value))
+const commandCompatibility = computed(() =>
+  getCommandCompatibility(framework.value, commandConfig.value)
+)
+const commandUnavailableMessage = computed(() =>
+  getRuntimeCompatibilityMessage(commandCompatibility.value)
+)
+const precisionNote = computed(() =>
+  props.quant?.id === 'bf16' && usesFp16ForCombinedPrecision(props.gpu)
+    ? t('run.bf16_fp16_fallback')
+    : null
+)
+const generatedCmd = computed(() =>
+  generateCmd(framework.value, commandConfig.value)
 )
 
 const docsUrl = computed(() => getFrameworkDocsUrl(framework.value?.id))
@@ -104,7 +179,7 @@ async function copyCmd() {
 
     <!-- 显存不足时：OOM 提示条（替换速度评级） -->
     <div
-      v-if="result && !result.vramOk"
+      v-if="result && !result.fitOk"
       class="rounded-xl overflow-hidden flex items-center gap-3 px-4 py-3"
       style="background:linear-gradient(135deg,#fef2f215 0%,#fee2e206 100%);border:1px solid #fca5a528"
     >
@@ -239,7 +314,7 @@ async function copyCmd() {
           :key="f.id"
           @click="!props.readonly && f.available && (framework = f)"
           :disabled="!f.available || props.readonly"
-          :title="!f.available ? t('run.framework_unavailable', { vendor: gpuVendor }) : f.recommended ? t('run.framework_recommended') : f.noteKey ? t(f.noteKey) : ''"
+          :title="!f.available ? f.unavailableMessage : f.recommended ? t('run.framework_recommended') : f.noteKey ? t(f.noteKey) : ''"
           :class="[
             'flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-xs border transition-colors relative',
             !f.available
@@ -260,7 +335,13 @@ async function copyCmd() {
       </div>
       <!-- llama.cpp 提示信息 -->
       <p v-if="framework.id === 'llamacpp' || framework.id === 'llamacpp_metal'" class="mt-2 text-xs text-blue-600 bg-blue-50 rounded px-2 py-1.5 border border-blue-200">
-        💡 {{ framework.noteKey ? t(framework.noteKey) : 'LM Studio, Ollama, Jan 等工具基于 llama.cpp，效率系数相同' }}
+        💡 {{ t(framework.noteKey ?? 'framework.llamacpp_note') }}
+      </p>
+      <p
+        v-if="precisionNote"
+        class="mt-2 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5 border border-amber-200"
+      >
+        {{ precisionNote }}
       </p>
     </div>
 
@@ -291,6 +372,19 @@ async function copyCmd() {
         >{{ t('run.copy_cmd_docs') }} ↗</a>
       </p>
     </template>
+    <p
+      v-else-if="framework?.id !== 'theory' && commandUnavailableMessage"
+      class="mt-3 text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5 border border-amber-200"
+    >
+      {{ t('run.launch_command_unavailable', { reason: commandUnavailableMessage }) }}
+      <a
+        v-if="docsUrl"
+        :href="docsUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="ml-1 text-blue-600 hover:underline"
+      >{{ t('run.copy_cmd_docs') }} ↗</a>
+    </p>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-gray-100">
       <!-- Decode -->
@@ -309,7 +403,7 @@ async function copyCmd() {
               {{ t('result.actual') }}
               <TipIcon :text="t('result.actual_tip')" />
             </div>
-            <div class="text-base font-bold text-emerald-700">{{ fmtToksRange(result.decodeToksMin, result.decodeToksMax) }}</div>
+            <div class="text-base font-bold text-emerald-700">{{ fmtToksRange(effectiveThroughputMin, effectiveThroughputMax) }}</div>
           </div>
           <div class="bg-gray-50 rounded-lg px-3 py-2">
             <div class="text-[10px] text-gray-500 mb-0.5 flex items-center gap-1">
@@ -327,7 +421,7 @@ async function copyCmd() {
               {{ t('result.tpot') }}
               <TipIcon :text="t('result.tpot_tip')" />
             </div>
-            <div class="text-sm font-bold text-gray-900">{{ result.tpot.toFixed(1) }} ms/tok</div>
+            <div class="text-sm font-bold text-gray-900">{{ effectiveTpot.toFixed(1) }} ms/tok</div>
           </div>
           <div class="bg-gray-50 rounded-lg px-3 py-2">
             <div class="text-[10px] text-gray-500 mb-1 flex items-center gap-1">
@@ -338,10 +432,10 @@ async function copyCmd() {
               <div class="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all"
-                  :style="{ width: Math.min(100, result.decodeToks / result.bwLimit * 100).toFixed(1) + '%', background: '#10b981' }"
+                  :style="{ width: Math.min(100, bandwidthUtilizationPct).toFixed(1) + '%', background: '#10b981' }"
                 />
               </div>
-              <span class="text-sm font-bold text-gray-900 tabular-nums w-10 text-right">{{ (result.decodeToks / result.bwLimit * 100).toFixed(0) }}%</span>
+              <span class="text-sm font-bold text-gray-900 tabular-nums w-10 text-right">{{ bandwidthUtilizationPct.toFixed(0) }}%</span>
             </div>
           </div>
           <div class="bg-gray-50 rounded-lg px-3 py-2">
@@ -393,14 +487,14 @@ async function copyCmd() {
             <div class="text-sm font-bold text-gray-900">{{ result.effectivePromptLen }} tok</div>
           </div>
           <div class="bg-gray-50 rounded-lg px-3 py-2">
-            <div class="text-[10px] text-gray-500 mb-0.5">{{ t('result.bottleneck') }}</div>
+            <div class="text-[10px] text-gray-500 mb-0.5">{{ t('result.decode_bottleneck') }}</div>
             <div :class="result.bottleneck === 'bandwidth' ? 'text-orange-600' : 'text-emerald-700'" class="text-sm font-bold">
               {{ t('result.' + result.bottleneck) }}
             </div>
           </div>
           <div class="bg-gray-50 rounded-lg px-3 py-2">
-            <div class="text-[10px] text-gray-500 mb-0.5">{{ t('result.roofline') }}</div>
-            <div class="text-sm font-bold text-gray-900">{{ result.roofline.toFixed(2) }}</div>
+            <div class="text-[10px] text-gray-500 mb-0.5">{{ t('result.decode_roofline') }}</div>
+            <div class="text-sm font-bold text-gray-900">{{ result.roofline != null ? result.roofline.toFixed(2) : '—' }}</div>
           </div>
         </div>
       </div>

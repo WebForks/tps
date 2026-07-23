@@ -6,6 +6,7 @@ import TimelineChart from '../components/result/TimelineChart.vue'
 import { ALL_MODELS } from '../data/models/index.js'
 import { GPU_LIST } from '../data/gpus/index.js'
 import { fmtParams, fmtCtx, isNew } from '../utils/format.js'
+import { usesFp16ForCombinedPrecision } from '../utils/runtime.js'
 const { t, locale } = useI18n()
 const isZh = computed(() => locale.value === 'zh')
 
@@ -103,6 +104,8 @@ const gpuGroups = computed(() => {
       groups.push({ label: isZh.value ? grp.zh : grp.en, list })
     }
   }
+  const rest = filteredGpus.value.filter(g => !used.has(g.id))
+  if (rest.length) groups.push({ label: t('library.others'), list: rest })
   return groups
 })
 
@@ -186,6 +189,13 @@ function openGpuDetail(g) {
 function closeDetail() {
   detailModel.value = null
   detailGpu.value = null
+}
+
+function computePrecisionLabel(gpu) {
+  if (usesFp16ForCombinedPrecision(gpu)) {
+    return isZh.value ? 'FP16 等效算力' : 'FP16-equivalent compute'
+  }
+  return isZh.value ? 'BF16/FP16 等效算力' : 'BF16/FP16-equivalent compute'
 }
 </script>
 
@@ -355,7 +365,7 @@ function closeDetail() {
                 <span class="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{{ group.list.length }}</span>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                <button
+                <div
                   v-for="m in group.list"
                   :key="m.id"
                   :data-model-id="m.id"
@@ -371,12 +381,16 @@ function closeDetail() {
                       class="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
                     >{{ m.type === 'moe' ? 'MoE' : 'Dense' }}</span>
                     <span
+                      v-if="m.localInference === false"
+                      class="text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 bg-rose-100 text-rose-700"
+                    >API</span>
+                    <span
                       class="text-sm truncate transition-colors text-gray-800 group-hover:text-emerald-700"
                     >{{ m.name }}</span>
                     <span v-if="isNew(m.released)" class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
                   </div>
                   <div class="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                    <span class="text-xs text-gray-400 hidden sm:inline">{{ fmtParams(m.params) }}</span>
+                    <span class="text-xs text-gray-400 hidden sm:inline">{{ m.parameterEstimate ? '≈' : '' }}{{ fmtParams(m.params) }}</span>
                     <span class="text-xs text-gray-300 hidden sm:inline">·</span>
                     <span class="text-xs text-gray-400 hidden sm:inline">{{ fmtCtx(m.max_ctx) }}</span>
                     <button
@@ -389,7 +403,7 @@ function closeDetail() {
                       </svg>
                     </button>
                   </div>
-                </button>
+                </div>
               </div>
             </div>
             <div v-if="modelGroups.length === 0" class="text-center text-gray-400 py-12 text-sm">
@@ -417,7 +431,7 @@ function closeDetail() {
               <span class="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{{ group.list.length }}</span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-              <button
+              <div
                 v-for="g in group.list"
                 :key="g.id"
                 :data-gpu-id="g.id"
@@ -434,6 +448,10 @@ function closeDetail() {
                         : 'bg-gray-100 text-gray-600'"
                     class="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
                   >{{ g.vendor === 'apple' ? 'AS' : g.tier === 'datacenter' ? 'DC' : 'CS' }}</span>
+                  <span
+                    v-if="g.modified"
+                    class="text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 bg-amber-100 text-amber-700"
+                  >MOD</span>
                   <span
                     class="text-sm truncate transition-colors text-gray-800 group-hover:text-emerald-700"
                   >{{ g.name }}</span>
@@ -453,7 +471,7 @@ function closeDetail() {
                     </svg>
                   </button>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
           <div v-if="gpuGroups.length === 0" class="text-center text-gray-400 py-12 text-sm">
@@ -482,6 +500,7 @@ function closeDetail() {
               <h3 class="text-base font-bold text-gray-900">{{ hoveredModel.name }}</h3>
               <span v-if="hoveredModel.type === 'moe'" class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-medium">MoE</span>
               <span v-else class="text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full font-medium">Dense</span>
+              <span v-if="hoveredModel.localInference === false" class="text-xs bg-rose-500 text-white px-2 py-0.5 rounded-full font-medium">API</span>
               <span v-if="isNew(hoveredModel.released)" class="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-medium">NEW</span>
             </div>
             <div class="text-xs text-gray-500">
@@ -493,7 +512,7 @@ function closeDetail() {
           <div class="grid grid-cols-2 gap-2">
             <div class="bg-gray-50 rounded-lg p-2.5 border border-gray-200">
               <div class="text-xs text-gray-600 mb-0.5">{{ t('library.parameters') }}</div>
-              <div class="text-lg font-bold text-gray-800">{{ fmtParams(hoveredModel.params) }}</div>
+              <div class="text-lg font-bold text-gray-800">{{ hoveredModel.parameterEstimate ? '≈' : '' }}{{ fmtParams(hoveredModel.params) }}</div>
             </div>
             <div class="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-2.5 border border-blue-200">
               <div class="text-xs text-gray-600 mb-0.5">{{ t('library.context') }}</div>
@@ -547,6 +566,9 @@ function closeDetail() {
               {{ t('library.window') }}: {{ hoveredModel.sliding_window }} · Local: {{ hoveredModel.local_layers }}
             </div>
           </div>
+          <div v-if="hoveredModel.localInference === false" class="text-xs text-amber-800 bg-amber-50 rounded px-2 py-1.5 border border-amber-200">
+            ⚠️ {{ isZh ? '仅提供 API；参数是公开信息不足时的近似值，不支持本地启动命令。' : 'API only; parameters are approximate where public details are incomplete, and no local launch command is available.' }}
+          </div>
         </div>
       </div>
       </Transition>
@@ -568,6 +590,7 @@ function closeDetail() {
           <div class="border-b border-gray-200 pb-2">
             <div class="flex items-center gap-2 mb-1">
               <h3 class="text-base font-bold text-gray-900">{{ hoveredGpu.name }}</h3>
+              <span v-if="hoveredGpu.modified" class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-medium">MOD</span>
               <span v-if="isNew(hoveredGpu.released)" class="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-medium">NEW</span>
             </div>
             <div class="text-xs text-gray-500">
@@ -586,7 +609,7 @@ function closeDetail() {
               <div class="text-lg font-bold text-blue-700">{{ hoveredGpu.bw }} <span class="text-sm">GB/s</span></div>
             </div>
             <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-2.5 border border-purple-200">
-              <div class="text-xs text-gray-600 mb-0.5">BF16 {{ t('library.compute') }}</div>
+              <div class="text-xs text-gray-600 mb-0.5">{{ computePrecisionLabel(hoveredGpu) }}</div>
               <div class="text-lg font-bold text-purple-700">{{ hoveredGpu.bf16 }} <span class="text-sm">T</span></div>
             </div>
             <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-2.5 border border-amber-200">
@@ -626,6 +649,18 @@ function closeDetail() {
           <div v-if="hoveredGpu.usableRatio && hoveredGpu.usableRatio < 1" class="text-xs text-gray-500 bg-amber-50 rounded px-2 py-1.5 border border-amber-200">
             ⚠️ {{ t('library.usable_vram') }} {{ (hoveredGpu.usableRatio * 100).toFixed(0) }}%
           </div>
+          <div
+            v-if="hoveredGpu.computeEstimate || hoveredGpu.tdpEstimate"
+            class="text-xs text-amber-800 bg-amber-50 rounded px-2 py-1.5 border border-amber-200"
+          >
+            ⚠️ {{ t('gpu.estimated_specs_warning') }}
+          </div>
+          <div v-if="hoveredGpu.unitKind === 'system'" class="text-xs text-blue-700 bg-blue-50 rounded px-2 py-1.5 border border-blue-200">
+            {{ isZh ? `整机聚合规格（${hoveredGpu.physicalGpuCount} 个物理 GPU）` : `Aggregate system specification (${hoveredGpu.physicalGpuCount} physical GPUs)` }}
+          </div>
+          <div v-if="hoveredGpu.modified" class="text-xs text-amber-800 bg-amber-50 rounded px-2 py-1.5 border border-amber-200">
+            ⚠️ {{ isZh ? '非官方改卡；卖家、PCB 与 VBIOS 批次之间的规格可能不同。' : 'Unofficial modification; specifications can vary by seller, PCB, and VBIOS batch.' }}
+          </div>
         </div>
       </div>
       </Transition>
@@ -650,6 +685,7 @@ function closeDetail() {
                   <h3 class="text-base font-bold text-gray-900">{{ detailModel.name }}</h3>
                   <span v-if="detailModel.type === 'moe'" class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-medium">MoE</span>
                   <span v-else class="text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full font-medium">Dense</span>
+                  <span v-if="detailModel.localInference === false" class="text-xs bg-rose-500 text-white px-2 py-0.5 rounded-full font-medium">API</span>
                   <span v-if="isNew(detailModel.released)" class="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-medium">NEW</span>
                 </div>
                 <div class="text-xs text-gray-600">
@@ -670,7 +706,7 @@ function closeDetail() {
             <div class="grid grid-cols-2 gap-2">
               <div class="bg-gray-50 rounded-lg p-2.5 border border-gray-200">
                 <div class="text-xs text-gray-700 mb-0.5">{{ t('library.parameters') }}</div>
-                <div class="text-lg font-bold text-gray-800">{{ fmtParams(detailModel.params) }}</div>
+                <div class="text-lg font-bold text-gray-800">{{ detailModel.parameterEstimate ? '≈' : '' }}{{ fmtParams(detailModel.params) }}</div>
               </div>
               <div class="bg-gradient-to-br from-blue-100 to-cyan-100 rounded-lg p-2.5 border border-blue-300">
                 <div class="text-xs text-gray-700 mb-0.5">{{ t('library.context') }}</div>
@@ -724,6 +760,9 @@ function closeDetail() {
                 {{ t('library.window') }}: {{ detailModel.sliding_window }} · Local: {{ detailModel.local_layers }}
               </div>
             </div>
+            <div v-if="detailModel.localInference === false" class="text-xs text-amber-800 bg-amber-50 rounded px-2 py-1.5 border border-amber-200">
+              ⚠️ {{ isZh ? '仅提供 API；参数是公开信息不足时的近似值，不支持本地启动命令。' : 'API only; parameters are approximate where public details are incomplete, and no local launch command is available.' }}
+            </div>
           </div>
         </div>
       </div>
@@ -746,6 +785,7 @@ function closeDetail() {
               <div class="flex-1">
                 <div class="flex items-center gap-2 mb-1 flex-wrap">
                   <h3 class="text-base font-bold text-gray-900">{{ detailGpu.name }}</h3>
+                  <span v-if="detailGpu.modified" class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-medium">MOD</span>
                   <span v-if="isNew(detailGpu.released)" class="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-medium">NEW</span>
                 </div>
                 <div class="text-xs text-gray-600">
@@ -773,7 +813,7 @@ function closeDetail() {
                 <div class="text-lg font-bold text-blue-800">{{ detailGpu.bw }} <span class="text-sm">GB/s</span></div>
               </div>
               <div class="bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg p-2.5 border border-purple-300">
-                <div class="text-xs text-gray-700 mb-0.5">BF16 {{ t('library.compute') }}</div>
+                <div class="text-xs text-gray-700 mb-0.5">{{ computePrecisionLabel(detailGpu) }}</div>
                 <div class="text-lg font-bold text-purple-800">{{ detailGpu.bf16 }} <span class="text-sm">T</span></div>
               </div>
               <div class="bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg p-2.5 border border-amber-300">
@@ -812,6 +852,26 @@ function closeDetail() {
             <!-- 可用显存比例 -->
             <div v-if="detailGpu.usableRatio && detailGpu.usableRatio < 1" class="text-xs text-gray-700 bg-amber-100 rounded px-2 py-1.5 border border-amber-300">
               ⚠️ {{ isZh ? '可用显存约' : 'Usable VRAM' }} {{ (detailGpu.usableRatio * 100).toFixed(0) }}%
+            </div>
+            <div
+              v-if="detailGpu.computeEstimate || detailGpu.tdpEstimate"
+              class="text-xs text-amber-800 bg-amber-50 rounded px-2 py-1.5 border border-amber-200"
+            >
+              ⚠️ {{ t('gpu.estimated_specs_warning') }}
+            </div>
+            <div v-if="detailGpu.unitKind === 'system'" class="text-xs text-blue-800 bg-blue-50 rounded px-2 py-1.5 border border-blue-200">
+              {{ isZh ? `整机聚合规格（${detailGpu.physicalGpuCount} 个物理 GPU）` : `Aggregate system specification (${detailGpu.physicalGpuCount} physical GPUs)` }}
+            </div>
+            <div v-if="detailGpu.modified" class="space-y-2 text-xs text-amber-800 bg-amber-50 rounded px-2 py-1.5 border border-amber-200">
+              <div>⚠️ {{ isZh ? '非官方改卡；卖家、PCB 与 VBIOS 批次之间的规格可能不同。' : 'Unofficial modification; specifications can vary by seller, PCB, and VBIOS batch.' }}</div>
+              <a
+                v-for="source in detailGpu.sources"
+                :key="source.url"
+                :href="source.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="block text-blue-600 hover:underline"
+              >{{ source.label }} ↗</a>
             </div>
           </div>
         </div>

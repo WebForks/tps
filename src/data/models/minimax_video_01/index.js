@@ -12,7 +12,10 @@ export default {
   head_dim: 128,
   hidden_size: 5120,
   max_ctx: 8192,
-  tags: ['chat', 'multilingual'],
+  tags: ['video-generation'],
+  localInference: false,
+  availability: 'api-only',
+  parameterEstimate: true,
 
   links: {
     hf: 'https://huggingface.co/MiniMaxAI',

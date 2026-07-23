@@ -31,6 +31,7 @@ const props = defineProps({
 })
 
 const validPoints = computed(() => (props.sweepData ?? []).filter(d => !d.error))
+const pointFits = point => point?.fitOk ?? point?.vramOk ?? false
 
 const labels = computed(() => validPoints.value.map(d => d.batch))
 
@@ -43,7 +44,7 @@ const oomBackgroundPlugin = {
     const xScale = scales.x
     if (!xScale) return
     const points = validPoints.value
-    const firstOomIdx = points.findIndex(d => !d.vramOk)
+    const firstOomIdx = points.findIndex(d => !pointFits(d))
     if (firstOomIdx < 0) return
     // 找到第一个 OOM 点的 x 像素位置
     const xStart = xScale.getPixelForValue(firstOomIdx)
@@ -66,8 +67,8 @@ const oomBackgroundPlugin = {
 const chartData = computed(() => {
   if (!validPoints.value.length) return { labels: [], datasets: [] }
 
-  const throughput = validPoints.value.map(d => d.vramOk ? +(d.effectiveToks?.toFixed(1) ?? 0) : null)
-  const latency    = validPoints.value.map(d => d.vramOk ? +(d.tpot?.toFixed(2) ?? 0) : null)
+  const throughput = validPoints.value.map(d => pointFits(d) ? +(d.effectiveToks?.toFixed(1) ?? 0) : null)
+  const latency    = validPoints.value.map(d => pointFits(d) ? +(d.tpot?.toFixed(2) ?? 0) : null)
 
   return {
     labels: labels.value,
@@ -127,7 +128,7 @@ const chartOptions = computed(() => ({
           const d = validPoints.value[idx]
           if (!d) return []
           const lines = []
-          if (!d.vramOk) lines.push(`⛔ ${t('result.sweep_oom')}`)
+          if (!pointFits(d)) lines.push(`⛔ ${t('result.sweep_unfit')}`)
           else lines.push(`  ${t('result.sweep_single')}: ${d.singleToks?.toFixed(1)} tok/s/req`)
           lines.push(`  ${t('result.bottleneck')}: ${d.bottleneck === 'bandwidth' ? t('result.bandwidth') : t('result.compute')}`)
           if (d.ppBubbleEff != null && d.ppBubbleEff < 0.99) {
@@ -164,7 +165,7 @@ const chartOptions = computed(() => ({
 }))
 
 const oomBatch = computed(() => {
-  const first = validPoints.value.find(d => !d.vramOk)
+  const first = validPoints.value.find(d => !pointFits(d))
   return first?.batch ?? null
 })
 
@@ -187,7 +188,7 @@ function fmtMs(v) { return v == null ? '—' : v.toFixed(1) }
         </span>
         <span v-if="oomBatch" class="flex items-center gap-1 text-red-500">
           <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500"></span>
-          {{ t('result.sweep_oom_from', { n: oomBatch }) }}
+          {{ t('result.sweep_unfit_from', { n: oomBatch }) }}
         </span>
       </div>
     </div>
@@ -219,7 +220,9 @@ function fmtMs(v) { return v == null ? '—' : v.toFixed(1) }
             <th v-if="!compact" class="hidden sm:table-cell px-2 py-1.5 text-center font-medium border-b border-gray-200 whitespace-nowrap">
               {{ t('result.bottleneck') }}
             </th>
-            <th class="px-1.5 py-1.5 text-center font-medium border-b border-gray-200 whitespace-nowrap">VRAM</th>
+            <th class="px-1.5 py-1.5 text-center font-medium border-b border-gray-200 whitespace-nowrap">
+              {{ t('result.sweep_fit') }}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -228,37 +231,37 @@ function fmtMs(v) { return v == null ? '—' : v.toFixed(1) }
             :key="d.batch"
             :class="[
               'border-b border-gray-100 transition-colors',
-              !d.vramOk ? 'bg-red-50 text-red-400' : d.batch === currentBatch ? 'bg-emerald-50' : 'hover:bg-gray-50'
+              !pointFits(d) ? 'bg-red-50 text-red-400' : d.batch === currentBatch ? 'bg-emerald-50' : 'hover:bg-gray-50'
             ]"
           >
             <td class="px-1.5 py-1.5 font-mono font-semibold" :class="d.batch === currentBatch ? 'text-emerald-700' : ''">
               {{ d.batch }}<span v-if="d.batch === currentBatch" class="ml-1 text-[9px] text-emerald-600 font-normal">▶</span>
             </td>
             <td class="px-1.5 py-1.5 text-right font-mono">
-              <span v-if="d.vramOk" class="text-emerald-700 font-medium">{{ fmtToks(d.effectiveToks) }}</span>
-              <span v-else class="text-red-400 line-through">OOM</span>
+              <span v-if="pointFits(d)" class="text-emerald-700 font-medium">{{ fmtToks(d.effectiveToks) }}</span>
+              <span v-else class="text-red-400">—</span>
             </td>
             <td class="px-1.5 py-1.5 text-right font-mono text-gray-600">
-              <span v-if="d.vramOk">{{ fmtToks(d.singleToks) }}</span>
+              <span v-if="pointFits(d)">{{ fmtToks(d.singleToks) }}</span>
               <span v-else>—</span>
             </td>
             <td class="px-1.5 py-1.5 text-right font-mono text-orange-600">
-              <span v-if="d.vramOk">{{ fmtMs(d.tpot) }}</span>
+              <span v-if="pointFits(d)">{{ fmtMs(d.tpot) }}</span>
               <span v-else>—</span>
             </td>
             <td v-if="!compact" class="hidden sm:table-cell px-2 py-1.5 text-right font-mono text-gray-600">
-              <span v-if="d.vramOk">{{ d.totalLatency != null ? (d.totalLatency / 1000).toFixed(1) : '—' }}</span>
+              <span v-if="pointFits(d)">{{ d.totalLatency != null ? (d.totalLatency / 1000).toFixed(1) : '—' }}</span>
               <span v-else>—</span>
             </td>
             <td v-if="!compact" class="hidden sm:table-cell px-2 py-1.5 text-center">
-              <span v-if="d.vramOk" :class="d.bottleneck === 'bandwidth' ? 'text-blue-500' : 'text-purple-500'">
+              <span v-if="pointFits(d)" :class="d.bottleneck === 'bandwidth' ? 'text-blue-500' : 'text-purple-500'">
                 {{ d.bottleneck === 'bandwidth' ? t('result.bandwidth') : t('result.compute') }}
               </span>
               <span v-else>—</span>
             </td>
             <td class="px-1.5 py-1.5 text-center">
-              <span v-if="d.vramOk" class="text-emerald-600">✓</span>
-              <span v-else class="text-red-500 font-medium">OOM</span>
+              <span v-if="pointFits(d)" class="text-emerald-600">✓</span>
+              <span v-else class="text-red-500 font-medium">×</span>
             </td>
           </tr>
         </tbody>

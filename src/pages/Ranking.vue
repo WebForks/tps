@@ -9,9 +9,22 @@ import { ALL_MODELS } from '../data/models/index.js'
 import { QUANT_MAP, FRAMEWORK_MAP, INTERCONNECT_MAP } from '../data/constants.js'
 import { calcAll, aggregateGpuSlots } from '../utils/calc.js'
 import { fmtParams, fmtGB, fmtToks, fmtMs, fmtCtx, isNew } from '../utils/format.js'
-import { PCIE_BW_OPTIONS } from '../data/runtime.js'
-
-const defaultPcieBw = PCIE_BW_OPTIONS[1] // PCIe 4.0
+import {
+  PCIE_BW_OPTIONS,
+  PCIE_WIDTH_OPTIONS,
+  CPU_MEM_CHANNEL_OPTIONS,
+  CPU_MEM_GENERATIONS,
+  CPU_MEM_TRANSFER_RATE_PRESETS,
+  RAM_CAPACITY_OPTIONS,
+  createCpuMemBwOption,
+  normalizeCpuMemMeasuredBandwidth,
+  normalizeRamCapacity,
+  resolveCpuMemBwOption,
+} from '../data/runtime.js'
+import {
+  getDefaultGpuMemoryUtilization,
+  normalizeGpuMemoryUtilization,
+} from '../utils/runtime.js'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -19,27 +32,135 @@ const route = useRoute()
 
 // ── URL 解析 ────────────────────────────────────────
 const _p = route.query
+const WORKLOAD_LIMITS = Object.freeze({
+  ctx: { min: 512, max: 10_485_760, fallback: 16_384 },
+  batch: { min: 1, max: 256, fallback: 1 },
+  promptLen: { min: 1, max: 10_485_760, fallback: 1_024 },
+  outputLen: { min: 1, max: 10_485_760, fallback: 1_024 },
+})
+
+function boundedInt(value, fallback, min, max) {
+  const number = Number(value)
+  return Number.isFinite(number)
+    ? Math.min(max, Math.max(min, Math.round(number)))
+    : fallback
+}
+
 function parseGpuSlots(query) {
   if (query.gpus) {
-    const parsed = String(query.gpus).split(',').map(s => {
+    let remaining = 512
+    const parsed = []
+    for (const s of String(query.gpus).split(',')) {
+      if (remaining <= 0) break
       const [id, count] = s.split(':')
-      return { gpu: GPU_LIST.find(g => g.id === id) ?? null, count: Number(count) || 1 }
-    }).filter(s => s.gpu)
+      const gpu = GPU_LIST.find(g => g.id === id && g.unitKind !== 'cpu') ?? null
+      if (!gpu) continue
+      const normalizedCount = boundedInt(count, 1, 1, remaining)
+      parsed.push({ gpu, count: normalizedCount })
+      remaining -= normalizedCount
+    }
     if (parsed.length) return parsed
   }
-  const gpu = GPU_LIST.find(g => g.id === query.gpu)
-  if (gpu) return [{ gpu, count: query.n ? Math.max(1, Number(query.n)) : 1 }]
+  const gpu = GPU_LIST.find(g => g.id === query.gpu && g.unitKind !== 'cpu')
+  if (gpu) return [{ gpu, count: boundedInt(query.n, 1, 1, 512) }]
   return null
 }
 
 // ── GPU 配置 ─────────────────────────────────────────
 const gpuSlots    = ref(parseGpuSlots(_p) ?? [{ gpu: GPU_LIST.find(g => g.id === 'h100_sxm') ?? GPU_LIST[0], count: 1 }])
-const interconnect = ref(INTERCONNECT_MAP.find(i => i.id === _p.ic) ?? INTERCONNECT_MAP[0])
-const ctx         = ref(_p.ctx ? Math.max(512, Number(_p.ctx)) : 16384)
-const batch       = ref(_p.b ? Math.max(1, Number(_p.b)) : 1)
+const interconnect = ref(
+  INTERCONNECT_MAP.find(i => i.id === _p.ic)
+  ?? INTERCONNECT_MAP.find(i => i.id === 'pcie4')
+  ?? INTERCONNECT_MAP[0]
+)
+const ctx         = ref(boundedInt(_p.ctx, WORKLOAD_LIMITS.ctx.fallback, WORKLOAD_LIMITS.ctx.min, WORKLOAD_LIMITS.ctx.max))
+const batch       = ref(boundedInt(_p.b, WORKLOAD_LIMITS.batch.fallback, WORKLOAD_LIMITS.batch.min, WORKLOAD_LIMITS.batch.max))
+const promptLen   = ref(boundedInt(_p.pl, WORKLOAD_LIMITS.promptLen.fallback, WORKLOAD_LIMITS.promptLen.min, WORKLOAD_LIMITS.promptLen.max))
+const outputLen   = ref(boundedInt(_p.ol, WORKLOAD_LIMITS.outputLen.fallback, WORKLOAD_LIMITS.outputLen.min, WORKLOAD_LIMITS.outputLen.max))
 const framework   = ref(FRAMEWORK_MAP.find(f => f.id === _p.fw) ?? FRAMEWORK_MAP.find(f => f.id === 'theory'))
 const gpuCount    = computed(() => gpuSlots.value.reduce((s, g) => s + g.count, 0))
-const sharedVram  = ref(_p.sv ? Math.max(1, Math.min(512, Number(_p.sv))) : 16)
+const sharedVram  = ref(boundedInt(_p.sv, 16, 1, 512))
+
+const pcieBw = ref(PCIE_BW_OPTIONS.find(option => option.id === _p.pcie) ?? PCIE_BW_OPTIONS[1])
+const pcieWidth = ref(PCIE_WIDTH_OPTIONS.find(option => option.id === _p.pw) ?? PCIE_WIDTH_OPTIONS[1])
+const initialCpuMemBw = resolveCpuMemBwOption(_p.cmb) ?? resolveCpuMemBwOption('ddr5_4800')
+const cpuMemBw = ref(createCpuMemBwOption(
+  initialCpuMemBw.generation,
+  initialCpuMemBw.transferRate,
+  boundedInt(_p.cmc, initialCpuMemBw.channels ?? 2, 1, 16),
+  normalizeCpuMemMeasuredBandwidth(_p.cmm, initialCpuMemBw.measuredBw),
+))
+const sysRam = ref(normalizeRamCapacity(_p.sr, 64))
+const cpuMemGeneration = computed(() => CPU_MEM_GENERATIONS.find(
+  generation => generation.id === cpuMemBw.value?.generation
+) ?? CPU_MEM_GENERATIONS[2])
+const cpuMemRatePresets = computed(() => (
+  CPU_MEM_TRANSFER_RATE_PRESETS[cpuMemGeneration.value.id] ?? []
+))
+
+function setCpuMemGeneration(generation) {
+  cpuMemBw.value = createCpuMemBwOption(
+    generation.id,
+    generation.defaultTransferRate,
+    cpuMemBw.value?.channels ?? 2,
+  )
+}
+
+function setCpuMemTransferRate(value) {
+  const next = createCpuMemBwOption(
+    cpuMemGeneration.value.id,
+    value,
+    cpuMemBw.value?.channels ?? 2,
+  )
+  if (next) cpuMemBw.value = next
+}
+
+function setCpuMemChannels(channels) {
+  const next = createCpuMemBwOption(
+    cpuMemGeneration.value.id,
+    cpuMemBw.value?.transferRate,
+    channels,
+  )
+  if (next) cpuMemBw.value = next
+}
+
+function setCpuMemMeasuredBandwidth(value) {
+  const next = createCpuMemBwOption(
+    cpuMemGeneration.value.id,
+    cpuMemBw.value?.transferRate,
+    cpuMemBw.value?.channels ?? 2,
+    normalizeCpuMemMeasuredBandwidth(value),
+  )
+  if (next) cpuMemBw.value = next
+}
+
+function setSystemRam(value) {
+  sysRam.value = normalizeRamCapacity(value, sysRam.value ?? 64)
+}
+
+function normalizeWorkloadInteger(target, event) {
+  const limits = WORKLOAD_LIMITS[target]
+  const source = {
+    ctx,
+    batch,
+    promptLen,
+    outputLen,
+  }[target]
+  const normalized = boundedInt(source.value, limits.fallback, limits.min, limits.max)
+  if (target === 'ctx') ctx.value = normalized
+  else if (target === 'batch') batch.value = normalized
+  else if (target === 'promptLen') promptLen.value = normalized
+  else if (target === 'outputLen') outputLen.value = normalized
+  if (event?.target) event.target.value = String(normalized)
+}
+
+function setFramework(id) {
+  const selected = FRAMEWORK_MAP.find(option => option.id === id)
+  if (selected) framework.value = selected
+}
+
+const workloadTokens = computed(() => promptLen.value + outputLen.value)
+const workloadFitsContext = computed(() => workloadTokens.value <= ctx.value)
 
 const effectiveGpu = computed(() => {
   const slots = gpuSlots.value.map(s => {
@@ -49,6 +170,19 @@ const effectiveGpu = computed(() => {
   })
   return slots.length === 1 ? slots[0].gpu : aggregateGpuSlots(slots)
 })
+const usesUnifiedMemory = computed(() => Boolean(effectiveGpu.value?.unifiedMemory))
+const usesConventionalSharedMemory = computed(() => (
+  Boolean(effectiveGpu.value?.sharedMemory)
+  && !usesUnifiedMemory.value
+))
+const gpuMemoryUtilization = computed(() => normalizeGpuMemoryUtilization(
+  null,
+  getDefaultGpuMemoryUtilization(framework.value, effectiveGpu.value),
+))
+const calculationGpu = computed(() => effectiveGpu.value
+  ? { ...effectiveGpu.value, usableRatio: gpuMemoryUtilization.value }
+  : null
+)
 
 // ── 排序 & 基础筛选 ──────────────────────────────────
 const sortBy          = ref(['speed','prefill','vram','params','vram_free','efficiency'].includes(_p.sort) ? _p.sort : 'speed')
@@ -111,162 +245,266 @@ function resetFilters() {
 
 // ── URL 同步 ─────────────────────────────────────────
 watch(
-  [gpuSlots, interconnect, ctx, batch, framework, sortBy, filterType, showOnlyRunnable, sharedVram,
+  [gpuSlots, interconnect, ctx, batch, promptLen, outputLen, framework, sortBy, filterType, showOnlyRunnable, sharedVram,
+   pcieBw, pcieWidth, cpuMemBw, sysRam,
    filterParams, filterMinSpeed, filterMinQuant, hideOffload, filterLegacy],
-  ([slots, ic, c, b, fw, sort, type, runnable, sv, params, minspeed, minquant, offload, legacy]) => {
+  ([slots, ic, c, b, pl, ol, fw, sort, type, runnable, sv, pb, pw, cmb, sr, params, minspeed, minquant, offload, legacy]) => {
     const query = {}
+    const hasUnifiedMemory = slots?.some(slot => slot.gpu?.unifiedMemory)
+    const hasSharedMemory = slots?.some(slot => slot.gpu?.sharedMemory)
+    const usesCpuMemorySettings = !hasUnifiedMemory
+    const usesPcieOffloadSettings = !hasUnifiedMemory && !hasSharedMemory
     if (slots?.length) query.gpus = slots.map(s => `${s.gpu.id}:${s.count}`).join(',')
     if (ic?.id) query.ic = ic.id
-    if (c !== 16384) query.ctx = c
-    if (b !== 1) query.b = b
+    if (c !== WORKLOAD_LIMITS.ctx.fallback) query.ctx = c
+    if (b !== WORKLOAD_LIMITS.batch.fallback) query.b = b
+    if (pl !== WORKLOAD_LIMITS.promptLen.fallback) query.pl = pl
+    if (ol !== WORKLOAD_LIMITS.outputLen.fallback) query.ol = ol
     if (fw?.id && fw.id !== 'theory') query.fw = fw.id
     if (sort !== 'speed') query.sort = sort
     if (type !== 'all') query.type = type
     if (!runnable) query.runnable = '0'
-    if (sv !== 16) query.sv = sv
+    if (hasSharedMemory && !hasUnifiedMemory && sv !== 16) query.sv = sv
+    if (usesPcieOffloadSettings && pb?.id && pb.id !== 'gen4') query.pcie = pb.id
+    if (usesPcieOffloadSettings && pw?.id && pw.id !== 'x8') query.pw = pw.id
+    const cpuMemBaseId = cmb?.generation && cmb?.transferRate
+      ? `${cmb.generation}_${cmb.transferRate}`
+      : cmb?.id
+    if (
+      usesCpuMemorySettings
+      &&
+      cpuMemBaseId
+      && (
+        cpuMemBaseId !== 'ddr5_4800'
+        || cmb?.channels !== 2
+        || cmb?.measuredBw != null
+      )
+    ) query.cmb = cpuMemBaseId
+    if (usesCpuMemorySettings && cmb?.channels != null && cmb.channels !== 2) query.cmc = cmb.channels
+    if (usesCpuMemorySettings && cmb?.measuredBw != null) query.cmm = cmb.measuredBw
+    if (usesCpuMemorySettings && sr !== 64) query.sr = sr
     if (params !== 'all') query.params = params
     if (minspeed !== '0') query.minspeed = minspeed
     if (minquant !== '') query.minquant = minquant
     if (offload) query.hideoffload = '1'
     if (legacy) query.legacy = '1'
     router.replace({ query })
-  }
+  },
+  { immediate: true },
 )
 
 // ── 计算所有模型结果（requestIdleCallback 分批，避免 UI 卡顿）────────
 const allModelResults = ref([])
-const calcProgress    = ref(0)   // 已完成模型数，用于进度展示
-let   _calcVersion    = 0        // 版本号，配置变化时取消旧批次
+const calcProgress = ref(0)
+const calcTotal = ref(0)
+const CALC_BATCH_SIZE = 8
+let _calcVersion = 0
+let _pendingCalcHandle = null
+let _pendingCalcUsesIdleCallback = false
 
-function _runCalcBatch(models, start, version) {
-  // 版本不匹配说明配置已变，丢弃本批次
+function _cancelScheduledCalc() {
+  if (_pendingCalcHandle == null) return
+  if (
+    _pendingCalcUsesIdleCallback
+    && typeof cancelIdleCallback !== 'undefined'
+  ) {
+    cancelIdleCallback(_pendingCalcHandle)
+  } else {
+    clearTimeout(_pendingCalcHandle)
+  }
+  _pendingCalcHandle = null
+}
+
+function _scheduleCalcBatch(callback) {
+  if (typeof requestIdleCallback !== 'undefined') {
+    _pendingCalcUsesIdleCallback = true
+    _pendingCalcHandle = requestIdleCallback(deadline => {
+      _pendingCalcHandle = null
+      callback(deadline)
+    }, { timeout: 250 })
+  } else {
+    _pendingCalcUsesIdleCallback = false
+    _pendingCalcHandle = setTimeout(() => {
+      _pendingCalcHandle = null
+      callback(null)
+    }, 0)
+  }
+}
+
+function _calculateModel(model, config) {
+  let bestQuant = null
+  let bestResult = null
+
+  for (const quant of QUANT_MAP) {
+    try {
+      const commonArgs = {
+        ...config.args,
+        model,
+        quant,
+      }
+      let result = calcAll({ ...commonArgs, cpuOffload: false, pcieBw: null })
+
+      if (
+        config.allowCpuOffload
+        && !result.fitOk
+        && !result.vramOk
+        && model.type === 'moe'
+        && model.active_params
+      ) {
+        const offloadResult = calcAll({
+          ...commonArgs,
+          cpuOffload: true,
+          pcieBw: config.offloadPcieBw,
+        })
+        if (offloadResult.fitOk) result = offloadResult
+      }
+
+      if (result.fitOk && (!bestResult || quant.bytes > bestQuant.bytes)) {
+        bestQuant = quant
+        bestResult = result
+      }
+    } catch {
+      // Unsupported catalog/runtime combinations must not abort the ranking.
+    }
+  }
+
+  return {
+    model,
+    quant: bestQuant,
+    result: bestResult,
+    canRun: Boolean(bestResult),
+    cpuOffload: bestResult?.cpuOffload ?? false,
+  }
+}
+
+function _compareModelResults(a, b) {
+  if (sortBy.value === 'params') {
+    return b.model.params - a.model.params
+      || a.model.name.localeCompare(b.model.name)
+  }
+  if (!a.result || !b.result) {
+    if (Boolean(a.result) !== Boolean(b.result)) return a.result ? -1 : 1
+    return a.model.name.localeCompare(b.model.name)
+  }
+
+  let difference = 0
+  if (sortBy.value === 'speed') {
+    difference = b.result.singleToks - a.result.singleToks
+  } else if (sortBy.value === 'prefill') {
+    difference = b.result.prefillToks - a.result.prefillToks
+  } else if (sortBy.value === 'vram') {
+    difference = a.result.totalNeeded - b.result.totalNeeded
+  } else if (sortBy.value === 'vram_free') {
+    difference = (b.result.totalVram - b.result.totalNeeded)
+      - (a.result.totalVram - a.result.totalNeeded)
+  } else if (sortBy.value === 'efficiency') {
+    difference = (b.result.tokPerJoule ?? 0) - (a.result.tokPerJoule ?? 0)
+  }
+  return difference || a.model.name.localeCompare(b.model.name)
+}
+
+function _runCalcBatch(models, start, version, config, results, deadline) {
   if (version !== _calcVersion) return
 
-  const BATCH = 20
-  const end = Math.min(start + BATCH, models.length)
-  for (let i = start; i < end; i++) {
-    const { model, quant, result, canRun, cpuOffload } = models[i]
-    allModelResults.value[i] = { model, quant, result, canRun, cpuOffload }
-  }
-  calcProgress.value = end
-
-  if (end < models.length) {
-    if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(() => _runCalcBatch(models, end, version), { timeout: 500 })
-    } else {
-      setTimeout(() => _runCalcBatch(models, end, version), 0)
+  const hardEnd = Math.min(start + CALC_BATCH_SIZE, models.length)
+  let index = start
+  while (index < hardEnd) {
+    // Always calculate at least one model, then yield when the idle budget is
+    // nearly exhausted.
+    if (
+      index > start
+      && deadline
+      && !deadline.didTimeout
+      && deadline.timeRemaining() < 2
+    ) {
+      break
     }
+    results.push(_calculateModel(models[index], config))
+    index += 1
+  }
+
+  if (version !== _calcVersion) return
+  calcProgress.value = index
+  allModelResults.value = results.slice()
+
+  if (index < models.length) {
+    _scheduleCalcBatch(nextDeadline => {
+      _runCalcBatch(models, index, version, config, results, nextDeadline)
+    })
   }
 }
 
-function _buildRawResults() {
-  if (!effectiveGpu.value || !framework.value) return []
+function _startCalculation() {
+  _cancelScheduledCalc()
+  const version = ++_calcVersion
+  allModelResults.value = []
+  calcProgress.value = 0
 
+  if (!calculationGpu.value || !framework.value) {
+    calcTotal.value = 0
+    return
+  }
+
+  const models = ALL_MODELS.filter(model =>
+    model.localInference !== false
+    && (filterType.value === 'all' || model.type === filterType.value)
+  )
+  calcTotal.value = models.length
+  const config = {
+    args: {
+      gpu: calculationGpu.value,
+      gpuCount: gpuCount.value,
+      interconnect: interconnect.value,
+      ctx: ctx.value,
+      batch: batch.value,
+      promptLen: promptLen.value,
+      outputLen: outputLen.value,
+      framework: framework.value,
+      flashAttention: true,
+      kvCacheQuant: null,
+      prefixCacheHit: 0,
+      speculativeDecoding: false,
+      acceptanceRate: 0.7,
+      draftLen: 4,
+      pureCpu: false,
+      cpuMemBw: cpuMemBw.value,
+      sysRam: sysRam.value,
+      pcieWidth: pcieWidth.value,
+    },
+    offloadPcieBw: pcieBw.value,
+    allowCpuOffload: !(
+      calculationGpu.value.unifiedMemory
+      || calculationGpu.value.sharedMemory
+      || calculationGpu.value.invalidMemoryMix
+    ),
+  }
   const results = []
-  for (const model of ALL_MODELS) {
-    if (filterType.value !== 'all' && model.type !== filterType.value) continue
-
-    let bestQuant = null
-    let bestResult = null
-
-    for (const quant of QUANT_MAP) {
-      try {
-        const commonArgs = {
-          gpu: effectiveGpu.value,
-          gpuCount: gpuCount.value,
-          interconnect: interconnect.value,
-          model,
-          quant,
-          ctx: ctx.value,
-          batch: batch.value,
-          promptLen: 1024,
-          outputLen: 1024,
-          framework: framework.value,
-          flashAttention: true,
-          kvCacheQuant: null,
-          prefixCacheHit: 0,
-          speculativeDecoding: false,
-          acceptanceRate: 0.7,
-          draftLen: 4,
-          pureCpu: false,
-          cpuMemBw: null,
-        }
-        let result = calcAll({ ...commonArgs, cpuOffload: false, pcieBw: null })
-
-        if (!result.vramOk && model.type === 'moe' && model.active_params) {
-          const offloadResult = calcAll({ ...commonArgs, cpuOffload: true, pcieBw: defaultPcieBw })
-          if (offloadResult.vramOk) result = offloadResult
-        }
-
-        if (result.vramOk) {
-          if (!bestResult || quant.bytes > bestQuant.bytes) {
-            bestQuant = quant
-            bestResult = result
-          }
-        }
-      } catch { /* skip */ }
-    }
-
-    if (bestResult || !showOnlyRunnable.value) {
-      results.push({
-        model,
-        quant: bestQuant,
-        result: bestResult,
-        canRun: !!bestResult,
-        cpuOffload: bestResult?.cpuOffload ?? false,
-      })
-    }
-  }
-
-  results.sort((a, b) => {
-    if (sortBy.value === 'speed') {
-      if (!a.result) return 1
-      if (!b.result) return -1
-      return b.result.singleToks - a.result.singleToks
-    } else if (sortBy.value === 'prefill') {
-      if (!a.result) return 1
-      if (!b.result) return -1
-      return b.result.prefillToks - a.result.prefillToks
-    } else if (sortBy.value === 'vram') {
-      if (!a.result) return 1
-      if (!b.result) return -1
-      return a.result.totalNeeded - b.result.totalNeeded
-    } else if (sortBy.value === 'vram_free') {
-      if (!a.result) return 1
-      if (!b.result) return -1
-      return (b.result.totalVram - b.result.totalNeeded) - (a.result.totalVram - a.result.totalNeeded)
-    } else if (sortBy.value === 'efficiency') {
-      if (!a.result) return 1
-      if (!b.result) return -1
-      const aEff = a.result.tokPerJoule ?? 0
-      const bEff = b.result.tokPerJoule ?? 0
-      return bEff - aEff
-    } else {
-      return b.model.params - a.model.params
-    }
+  _scheduleCalcBatch(deadline => {
+    _runCalcBatch(models, 0, version, config, results, deadline)
   })
-
-  return results
 }
 
-// 监听所有影响计算的配置，触发分批重算
+// Only calcAll inputs restart the idle job. Sorting and post-filters apply to
+// partial/completed rows immediately without repeating the expensive work.
 watch(
-  [effectiveGpu, gpuCount, interconnect, ctx, batch, framework, sortBy, filterType, showOnlyRunnable],
-  () => {
-    const version = ++_calcVersion
-    allModelResults.value = []
-    calcProgress.value = 0
-    const raw = _buildRawResults()
-    // 预分配数组长度，避免 reactive 数组频繁扩容
-    allModelResults.value = new Array(raw.length).fill(null)
-    _runCalcBatch(raw, 0, version)
-  },
+  [calculationGpu, gpuCount, interconnect, ctx, batch, promptLen, outputLen, framework,
+   filterType, pcieBw, pcieWidth, cpuMemBw, sysRam],
+  _startCalculation,
   { immediate: true }
 )
 
-// ── 后置筛选（在已排序结果上叠加）──────────────────────
+onUnmounted(() => {
+  _calcVersion += 1
+  _cancelScheduledCalc()
+})
+
+// ── 后置筛选与排序 ────────────────────────────────────
 const modelResults = computed(() => {
   let list = allModelResults.value.filter(Boolean)
+
+  if (showOnlyRunnable.value) {
+    list = list.filter(item => item.canRun)
+  }
 
   // 过滤 legacy 模型（默认隐藏）
   if (!filterLegacy.value) {
@@ -304,6 +542,7 @@ const modelResults = computed(() => {
     list = list.filter(item => !item.cpuOffload)
   }
 
+  list.sort(_compareModelResults)
   return list
 })
 
@@ -335,6 +574,14 @@ onUnmounted(() => { observer?.disconnect() })
 
 // ── 跳转 ─────────────────────────────────────────────
 function useThisModel(modelData) {
+  const unifiedMemory = Boolean(effectiveGpu.value?.unifiedMemory)
+  const usesCpuMemory = !unifiedMemory && Boolean(
+    modelData.cpuOffload
+    || effectiveGpu.value?.sharedMemory
+  )
+  const cpuMemBaseId = cpuMemBw.value?.generation && cpuMemBw.value?.transferRate
+    ? `${cpuMemBw.value.generation}_${cpuMemBw.value.transferRate}`
+    : cpuMemBw.value?.id
   const query = {
     gpus:  gpuSlots.value.map(s => `${s.gpu.id}:${s.count}`).join(','),
     ic:    interconnect.value?.id ?? undefined,
@@ -343,8 +590,16 @@ function useThisModel(modelData) {
     fw:    framework.value.id,
     ctx:   ctx.value,
     b:     batch.value !== 1 ? batch.value : undefined,
-    co:    modelData.cpuOffload ? '1' : undefined,
-    pcie:  modelData.cpuOffload ? defaultPcieBw.id : undefined,
+    pl:    promptLen.value,
+    ol:    outputLen.value,
+    co:    !unifiedMemory && modelData.cpuOffload ? 'on' : undefined,
+    pcie:  !unifiedMemory && modelData.cpuOffload ? pcieBw.value.id : undefined,
+    pw:    !unifiedMemory && modelData.cpuOffload ? pcieWidth.value.id : undefined,
+    cmb:   usesCpuMemory ? cpuMemBaseId : undefined,
+    cmc:   usesCpuMemory && cpuMemBw.value.channels !== 2 ? cpuMemBw.value.channels : undefined,
+    cmm:   usesCpuMemory && cpuMemBw.value.measuredBw != null ? cpuMemBw.value.measuredBw : undefined,
+    gmu:   gpuMemoryUtilization.value,
+    sr:    usesCpuMemory && sysRam.value !== 64 ? sysRam.value : undefined,
     sv:    effectiveGpu.value?.sharedMemory && sharedVram.value !== 16 ? sharedVram.value : undefined,
   }
   router.push({ path: '/', query })
@@ -366,6 +621,250 @@ function useThisModel(modelData) {
       <div class="bg-white rounded-xl border border-gray-200 p-4">
         <GpuConfig v-model:gpuSlots="gpuSlots" v-model:interconnect="interconnect" v-model:sharedVram="sharedVram" />
       </div>
+
+      <!-- Every result uses this explicit workload. -->
+      <section class="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+        <div>
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-700">
+            {{ t('ranking.workload') }}
+          </h2>
+          <p class="mt-1 text-xs leading-relaxed text-gray-500">{{ t('ranking.workload_tip') }}</p>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.ctx') }}</span>
+            <input
+              v-model.number="ctx"
+              @change="normalizeWorkloadInteger('ctx', $event)"
+              type="number"
+              :min="WORKLOAD_LIMITS.ctx.min"
+              :max="WORKLOAD_LIMITS.ctx.max"
+              step="1"
+              class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.batch') }}</span>
+            <input
+              v-model.number="batch"
+              @change="normalizeWorkloadInteger('batch', $event)"
+              type="number"
+              :min="WORKLOAD_LIMITS.batch.min"
+              :max="WORKLOAD_LIMITS.batch.max"
+              step="1"
+              class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.prompt') }}</span>
+            <input
+              v-model.number="promptLen"
+              @change="normalizeWorkloadInteger('promptLen', $event)"
+              type="number"
+              :min="WORKLOAD_LIMITS.promptLen.min"
+              :max="WORKLOAD_LIMITS.promptLen.max"
+              step="1"
+              class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.output') }}</span>
+            <input
+              v-model.number="outputLen"
+              @change="normalizeWorkloadInteger('outputLen', $event)"
+              type="number"
+              :min="WORKLOAD_LIMITS.outputLen.min"
+              :max="WORKLOAD_LIMITS.outputLen.max"
+              step="1"
+              class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </label>
+          <label class="block sm:col-span-2 lg:col-span-1">
+            <span class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.framework') }}</span>
+            <select
+              :value="framework.id"
+              @change="setFramework($event.target.value)"
+              class="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            >
+              <option v-for="option in FRAMEWORK_MAP" :key="option.id" :value="option.id">
+                {{ t(`framework.${option.id}`) }}
+              </option>
+            </select>
+          </label>
+        </div>
+
+        <p
+          class="rounded-lg border px-3 py-2 text-xs"
+          :class="workloadFitsContext
+            ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+            : 'border-red-200 bg-red-50 text-red-700'"
+        >
+          {{ t('ranking.workload_total', {
+            total: workloadTokens.toLocaleString(),
+            context: ctx.toLocaleString(),
+          }) }}
+          <span v-if="!workloadFitsContext" class="font-semibold">
+            {{ t('ranking.workload_invalid') }}
+          </span>
+        </p>
+      </section>
+
+      <!-- Unified-memory devices already carry their own capacity and bandwidth. -->
+      <section
+        v-if="!usesUnifiedMemory"
+        class="rounded-xl border border-gray-200 bg-white p-4 space-y-4"
+      >
+        <div>
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-700">
+            {{ t(usesConventionalSharedMemory
+              ? 'ranking.shared_memory_assumptions'
+              : 'ranking.offload_assumptions') }}
+          </h2>
+          <p class="mt-1 text-xs leading-relaxed text-gray-500">
+            {{ t(usesConventionalSharedMemory
+              ? 'ranking.shared_memory_assumptions_tip'
+              : 'ranking.offload_assumptions_tip') }}
+          </p>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="space-y-3 rounded-lg bg-gray-50 p-3">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.ram_generation') }}</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="generation in CPU_MEM_GENERATIONS"
+                  :key="generation.id"
+                  @click="setCpuMemGeneration(generation)"
+                  class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+                  :class="cpuMemGeneration.id === generation.id
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'"
+                >{{ generation.label }}</button>
+              </div>
+            </div>
+
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.ram_transfer_rate') }}</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="rate in cpuMemRatePresets"
+                  :key="rate"
+                  @click="setCpuMemTransferRate(rate)"
+                  class="rounded-lg border px-2 py-1 text-xs transition-colors"
+                  :class="cpuMemBw.transferRate === rate
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'"
+                >{{ rate }}</button>
+                <input
+                  :value="cpuMemBw.transferRate"
+                  @change="setCpuMemTransferRate($event.target.value)"
+                  type="number"
+                  :min="cpuMemGeneration.minTransferRate"
+                  :max="cpuMemGeneration.maxTransferRate"
+                  step="1"
+                  class="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1 text-center text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  :aria-label="t('run.ram_transfer_rate_custom')"
+                />
+                <span class="self-center text-xs text-gray-400">MT/s</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.ram_channels') }}</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="channels in CPU_MEM_CHANNEL_OPTIONS"
+                  :key="channels"
+                  @click="setCpuMemChannels(channels)"
+                  class="rounded-lg border px-2.5 py-1 text-xs transition-colors"
+                  :class="cpuMemBw.channels === channels
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'"
+                >{{ channels }}</button>
+              </div>
+              <p class="mt-1.5 text-xs text-emerald-700">
+                {{ t('run.ram_theoretical_bw_channels', { channels: cpuMemBw.channels, bw: cpuMemBw.theoreticalBw.toFixed(1) }) }}
+              </p>
+            </div>
+
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.ram_measured_bw') }}</label>
+              <div class="flex items-center gap-2">
+                <input
+                  :value="cpuMemBw.measuredBw ?? ''"
+                  @change="setCpuMemMeasuredBandwidth($event.target.value)"
+                  type="number"
+                  min="0.1"
+                  max="10000"
+                  step="0.1"
+                  :placeholder="t('run.ram_measured_bw_placeholder')"
+                  class="w-40 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                <span class="text-xs text-gray-400">GB/s</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3 rounded-lg bg-gray-50 p-3">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.sys_ram') }}</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="capacity in RAM_CAPACITY_OPTIONS"
+                  :key="capacity"
+                  @click="setSystemRam(capacity)"
+                  class="rounded-lg border px-2 py-1 text-xs transition-colors"
+                  :class="sysRam === capacity
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'"
+                >{{ capacity }} GB</button>
+                <input
+                  :value="sysRam"
+                  @change="setSystemRam($event.target.value)"
+                  type="number"
+                  min="8"
+                  max="4096"
+                  step="1"
+                  class="w-24 rounded-lg border border-gray-200 bg-white px-2 py-1 text-center text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  :aria-label="t('run.sys_ram_custom')"
+                />
+              </div>
+            </div>
+
+            <div v-if="!usesConventionalSharedMemory">
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.pcie_bw') }}</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="option in PCIE_BW_OPTIONS"
+                  :key="option.id"
+                  @click="pcieBw = option"
+                  class="rounded-lg border px-2.5 py-1 text-xs transition-colors"
+                  :class="pcieBw.id === option.id
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'"
+                >{{ option.label }}</button>
+              </div>
+            </div>
+
+            <div v-if="!usesConventionalSharedMemory">
+              <label class="mb-1.5 block text-xs font-medium text-gray-500">{{ t('run.pcie_width') }}</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="option in PCIE_WIDTH_OPTIONS"
+                  :key="option.id"
+                  @click="pcieWidth = option"
+                  class="rounded-lg border px-3 py-1 text-xs transition-colors"
+                  :class="pcieWidth.id === option.id
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100'"
+                >{{ option.label }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- 筛选和排序 -->
       <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
@@ -483,14 +982,14 @@ function useThisModel(modelData) {
       </div>
 
       <!-- 计算进度条（分批计算期间显示） -->
-      <div v-if="calcProgress > 0 && calcProgress < allModelResults.length" class="bg-white rounded-xl border border-gray-200 px-4 py-2 flex items-center gap-3">
+      <div v-if="calcTotal > 0 && calcProgress < calcTotal" class="bg-white rounded-xl border border-gray-200 px-4 py-2 flex items-center gap-3">
         <div class="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
           <div
             class="bg-emerald-500 h-1.5 rounded-full transition-all duration-200"
-            :style="{ width: (calcProgress / allModelResults.length * 100).toFixed(1) + '%' }"
+            :style="{ width: (calcProgress / calcTotal * 100).toFixed(1) + '%' }"
           />
         </div>
-        <span class="text-xs text-gray-400 whitespace-nowrap">{{ calcProgress }} / {{ allModelResults.length }}</span>
+        <span class="text-xs text-gray-400 whitespace-nowrap">{{ calcProgress }} / {{ calcTotal }}</span>
       </div>
 
       <!-- 模型列表 -->

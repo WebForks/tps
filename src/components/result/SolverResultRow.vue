@@ -41,11 +41,22 @@ const quantLabel = computed(() => props.row.quant?.label ?? '—')
 
 // GPU 配置描述（模式 A）
 const gpuDesc = computed(() => {
+  if (props.row.gpuSlots?.length > 1) {
+    return props.row.gpuSlots
+      .map(slot => `${slot.gpu.name} × ${slot.count}`)
+      .join(' + ')
+  }
   if (!props.row.gpu) return '—'
+  if (props.row.gpu.unitKind === 'system') {
+    const systems = props.row.gpuCount ?? 1
+    const physical = systems * (props.row.gpu.physicalGpuCount ?? 1)
+    return `${props.row.gpu.name} · ${t('gpu.system_unit_summary', { systems, physical })}`
+  }
   return `${props.row.gpu.name} × ${props.row.gpuCount}`
 })
 
 const totalGpuCount = computed(() => props.row.totalGpuCount ?? props.row.gpuCount ?? 1)
+const isAggregateSystem = computed(() => props.row.gpu?.unitKind === 'system')
 </script>
 
 <template>
@@ -61,6 +72,9 @@ const totalGpuCount = computed(() => props.row.totalGpuCount ?? props.row.gpuCou
         <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">{{ frameworkLabel }}</span>
         <span v-if="row.ppCount > 1" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700">PP{{ row.ppCount }}</span>
         <span v-if="row.epCount > 1" class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-fuchsia-100 text-fuchsia-700">EP{{ row.epCount }}</span>
+        <span v-if="row.changeKey" class="text-[10px] font-medium text-emerald-700">
+          {{ t(row.changeKey, row.changeParams ?? {}) }}
+        </span>
       </div>
 
       <!-- 指标行 -->
@@ -85,19 +99,23 @@ const totalGpuCount = computed(() => props.row.totalGpuCount ?? props.row.gpuCou
         </div>
         <!-- GPU 数量（模式 A 时显示） -->
         <div class="flex items-center gap-1">
-          <span class="text-gray-400">{{ t('solver.gpu_count_label') }}</span>
+          <span class="text-gray-400">{{ isAggregateSystem ? t('gpu.system_count') : t('solver.gpu_count_label') }}</span>
           <span class="text-gray-700 font-medium">{{ totalGpuCount }}</span>
         </div>
         <!-- 速度/卡 -->
         <div class="flex items-center gap-1">
-          <span class="text-gray-400">{{ t('solver.speed_per_gpu') }}</span>
+          <span class="text-gray-400">{{ isAggregateSystem ? t('solver.speed_per_system') : t('solver.speed_per_gpu') }}</span>
           <span class="text-gray-700 font-medium">{{ fmtToks(row.decodeSpeed / totalGpuCount) }}</span>
+        </div>
+        <div v-if="row.relativeCapacity != null" class="flex items-center gap-1">
+          <span class="text-gray-400">{{ t('solver.relative_capacity') }}</span>
+          <span class="text-gray-700 font-medium">{{ row.relativeCapacity.toFixed(2) }}×</span>
         </div>
       </div>
 
       <!-- 洞察建议 -->
-      <div v-if="row.insight" class="mt-1.5 text-xs text-gray-500 leading-relaxed">
-        {{ row.insight }}
+      <div v-if="row.insightKeys?.length || row.insight" class="mt-1.5 text-xs text-gray-500 leading-relaxed">
+        {{ row.insightKeys?.map(key => t(key)).join(t('solver.insight_separator')) || row.insight }}
       </div>
     </div>
 

@@ -15,6 +15,7 @@ export default {
   mla_ratio: null,
   layers: 30,
   kv_heads: 8,           // local (sliding) attention KV heads
+  query_heads: 16,
   head_dim: 256,
   global_kv_heads: 2,    // global (full) attention KV heads
   global_head_dim: 512,  // global attention head dim

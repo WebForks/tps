@@ -36,13 +36,13 @@
     <meta name="description" content="在线估算大语言模型（LLM）在各类 GPU 上的推理速度（TPS）、显存占用与延迟。支持 DeepSeek、Llama、Gemma、Qwen 等主流模型，覆盖 H100、A100、RTX 4090 等 GPU。" />
     <meta name="keywords" content="GPU推理速度,LLM推理,TPS计算器,显存计算,大模型部署,vLLM,TensorRT-LLM,DeepSeek,Llama,Qwen,H100,A100" />
     <meta name="author" content="TPS Calculator" />
-    <link rel="canonical" href="https://tps.bunai.com/" />
+    <link rel="canonical" href="https://tps.bunai.cc/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="GPU推理速度计算器 · TPS Calculator" />
     <meta property="og:description" content="在线估算大语言模型在各类 GPU 上的推理速度、显存占用与延迟。支持 DeepSeek、Llama、Gemma、Qwen 等主流模型。" />
-    <meta property="og:url" content="https://tps.bunai.com/" />
+    <meta property="og:url" content="https://tps.bunai.cc/" />
     <meta property="og:locale" content="zh_CN" />
 
     <!-- Twitter Card -->
@@ -61,8 +61,8 @@
       "@graph": [
         {
           "@type": "WebSite",
-          "@id": "https://tps.bunai.com/#website",
-          "url": "https://tps.bunai.com/",
+          "@id": "https://tps.bunai.cc/#website",
+          "url": "https://tps.bunai.cc/",
           "name": "TPS Calculator",
           "description": "在线估算大语言模型（LLM）在各类 GPU 上的推理速度、显存占用与延迟的免费工具",
           "inLanguage": ["zh-CN", "en"],
@@ -70,17 +70,17 @@
             "@type": "SearchAction",
             "target": {
               "@type": "EntryPoint",
-              "urlTemplate": "https://tps.bunai.com/library?q={search_term_string}"
+              "urlTemplate": "https://tps.bunai.cc/library?q={search_term_string}"
             },
             "query-input": "required name=search_term_string"
           }
         },
         {
           "@type": "WebApplication",
-          "@id": "https://tps.bunai.com/#app",
-          "url": "https://tps.bunai.com/",
+          "@id": "https://tps.bunai.cc/#app",
+          "url": "https://tps.bunai.cc/",
           "name": "GPU 推理速度计算器 · TPS Calculator",
-          "description": "在线估算大语言模型（LLM）在各类 GPU 上的推理速度（TPS）、显存占用与延迟。支持 348+ 模型、170+ GPU、多种量化精度与推理框架。",
+          "description": "在线估算大语言模型（LLM）在各类 GPU 上的推理速度（TPS）、显存占用与延迟。支持 368 个规范模型、250 个硬件条目、多种量化精度与推理框架。",
           "applicationCategory": "DeveloperApplication",
           "operatingSystem": "Web",
           "browserRequirements": "requires JavaScript",
@@ -97,21 +97,21 @@
             "多卡 Tensor Parallel 建模",
             "支持 vLLM、TensorRT-LLM、llama.cpp、MLX、SGLang、TGI",
             "支持 FP32/BF16/FP8/INT8/INT4 等量化精度",
-            "170+ GPU 覆盖（NVIDIA / AMD / Apple Silicon / 国产）",
-            "348+ 主流开源模型"
+            "250 个硬件条目（NVIDIA / AMD / Apple Silicon / 国产）",
+            "368 个规范模型"
           ],
           "keywords": "GPU推理速度,LLM推理,TPS计算器,显存计算,大模型部署,vLLM,TensorRT-LLM,llama.cpp,DeepSeek,Llama,Qwen,Gemma,H100,A100,RTX4090"
         },
         {
           "@type": "FAQPage",
-          "@id": "https://tps.bunai.com/#faq",
+          "@id": "https://tps.bunai.cc/#faq",
           "mainEntity": [
             {
               "@type": "Question",
               "name": "TPS 是什么？LLM 推理速度如何衡量？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "TPS（Tokens Per Second）即每秒生成的 Token 数量，是衡量大语言模型（LLM）推理速度的核心指标。TPS 越高，模型响应越快。通常还关注 TTFT（首 Token 延迟）和 TPOT（每输出 Token 延迟）。TPS Calculator 可一键计算给定 GPU + 模型 + 量化组合的理论 TPS 上界。"
+                "text": "TPS（Tokens Per Second）即每秒生成的 Token 数量，是衡量大语言模型（LLM）推理速度的核心指标。TPS 越高，模型响应越快。通常还关注 TTFT（首 Token 延迟）和 TPOT（每输出 Token 延迟）。TPS Calculator 会根据模型、量化、上下文、批大小、硬件和框架给出工程估算；结果不是实机基准。"
               }
             },
             {
@@ -119,7 +119,7 @@
               "name": "DeepSeek-R1 671B 在 H100 上的推理速度是多少？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "DeepSeek-R1（671B MoE）在 8 张 H100 SXM（FP8 量化，约 336 GB 显存）下，使用 vLLM 框架的 Decode TPS 理论上界约 200–400 token/s（batch=1）。BF16 全精度约需 1342 GB 显存，需 16 张以上 H100。TPS Calculator 可计算不同卡数和量化精度下的精确估算值。"
+                "text": "DeepSeek-R1（671B MoE）的权重本身约需 1342 GB（BF16）、671 GB（FP8）或 336 GB（INT4），另外还要为 KV Cache、运行时和显存预留空间。8 张 80 GB H100 只有 640 GB 原始显存，因此 FP8 权重也放不下；应增加卡数或使用更低精度。速度还取决于批大小、上下文和互联拓扑，应使用实际配置估算。"
               }
             },
             {
@@ -127,7 +127,7 @@
               "name": "DeepSeek-R1 671B 需要多少显存？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "DeepSeek-R1（671B MoE，BF16 精度）权重约需 1342 GB 显存，FP8 量化约需 671 GB，INT4 量化约需 336 GB。通常需要 8 张 H100 SXM 80GB（FP8）或更多。TPS Calculator 支持精确计算包含 KV Cache 在内的总显存需求。"
+                "text": "DeepSeek-R1（671B MoE）的裸权重约需 1342 GB（BF16）、671 GB（FP8）或 336 GB（INT4）。实际部署还需要 KV Cache、激活、工作区和框架预留；8 张 80 GB H100 的 640 GB 原始显存不足以容纳 FP8 权重。TPS Calculator 会把这些主要开销和可用显存比例一起纳入估算。"
               }
             },
             {
@@ -135,7 +135,7 @@
               "name": "DeepSeek-V3 在 H100 上跑多快？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "DeepSeek-V3（685B MoE）与 DeepSeek-R1 规模相当。在 8 张 H100 SXM（FP8 量化）下，vLLM 框架 Decode TPS 理论上界约 150–350 token/s。DeepSeek-V3 采用 MLA 注意力机制，KV Cache 显存占用远低于传统 MHA，可支持更长上下文。"
+                "text": "DeepSeek-V3 是约 671B 参数的 MoE 模型。FP8 裸权重约 671 GB，所以 8 张 80 GB H100 的 640 GB 原始显存不足，更不用说 KV Cache 与运行时预留。MLA 可显著减少 KV Cache，但不会减少全部模型权重；速度需要结合实际卡数、量化、批大小、上下文和互联估算。"
               }
             },
             {
@@ -143,7 +143,7 @@
               "name": "Llama 3.1 70B 在 A100 上的推理速度是多少？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Llama-3.1-70B 在单张 A100 80GB 上，BF16 精度（约 140 GB 显存）需要 2 张，INT4 量化（约 35 GB）可在单张 A100 上运行，vLLM 框架 Decode TPS 约 400–600 token/s（batch=1）。TPS Calculator 支持精确估算不同批大小下的吞吐量。"
+                "text": "Llama-3.1-70B 的裸权重约需 140 GB（BF16）或 35 GB（INT4）。BF16 至少需要两张 80 GB 卡并为 KV Cache 和运行时留出空间；INT4 通常可放入单张 A100 80GB。实际 Decode TPS 会随批大小、上下文长度、量化内核、框架和多卡互联变化。"
               }
             },
             {
@@ -151,7 +151,7 @@
               "name": "Llama 3.3 70B 在 RTX 4090 上能跑多快？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Llama-3.3-70B 在单张 RTX 4090（24 GB）上需要 INT4 量化（约 35 GB），超出显存，需要 2 张 RTX 4090 或使用 Q3_K/Q2_K 量化压缩到 24 GB 以内。单卡 Q3_K 量化下 llama.cpp 约 30–50 token/s。2 张 RTX 4090（INT4）约 60–100 token/s。"
+                "text": "Llama-3.3-70B 的 INT4 裸权重约 35 GB，无法放入单张 24 GB RTX 4090；通常需要至少两张卡。更低位 GGUF 有时能把权重压到单卡容量附近，但还必须给 KV Cache 和运行时留空间，且质量与内核支持会变化。速度应按所选量化、上下文和卸载方式估算。"
               }
             },
             {
@@ -159,7 +159,7 @@
               "name": "Qwen3 235B A22B 在 H100 上跑多快？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Qwen3-235B-A22B（MoE 架构，激活参数 22B）在 4 张 H100 SXM（BF16，约 470 GB 显存）下，vLLM 框架 Decode TPS 理论上界约 300–600 token/s。由于 MoE 激活参数较少，实际计算量接近 22B 模型，显存带宽效率更高。"
+                "text": "Qwen3-235B-A22B 的 BF16 裸权重约 470 GB，4 张 80 GB H100 只有 320 GB 原始显存，因此该配置无法容纳 BF16 模型。MoE 每个 token 只激活部分专家，可降低计算量，但全部驻留专家权重仍占显存。应增加卡数或降低权重精度后再估算速度。"
               }
             },
             {
@@ -167,7 +167,7 @@
               "name": "Qwen2.5 72B 在 A100 上推理速度是多少？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Qwen2.5-72B 在 2 张 A100 80GB（BF16，约 144 GB）下，vLLM 框架 Decode TPS 约 300–500 token/s。INT4 量化可在单张 A100 运行，TPS 约 400–700 token/s（带宽受限）。TPS Calculator 支持 Tensor Parallel 多卡通信效率建模。"
+                "text": "Qwen2.5-72B 的裸权重约需 144 GB（BF16）或 36 GB（INT4）。BF16 通常至少需要两张 A100 80GB，INT4 通常可放入单张 80 GB 卡，但两种配置都要给 KV Cache 和运行时预留空间。TPS Calculator 会同时考虑计算、显存带宽和 Tensor Parallel 通信。"
               }
             },
             {
@@ -175,7 +175,7 @@
               "name": "Qwen2.5 7B 在 RTX 4090 上跑多快？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Qwen2.5-7B 在 RTX 4090（24 GB，1.0 TB/s 带宽）上，BF16 精度（约 14 GB）vLLM Decode TPS 约 800–1200 token/s，llama.cpp Q4_K 量化约 200–300 token/s。小模型在 RTX 4090 上带宽利用率极高，是本地部署的高性价比选择。"
+                "text": "Qwen2.5-7B 的 BF16 裸权重约 14 GB，通常可放入 24 GB RTX 4090，并保留一定 KV Cache 与运行时空间。实际 TPS 取决于批大小、上下文、量化、框架版本和内核效率；不能仅凭显存容量给出固定速度。"
               }
             },
             {
@@ -183,7 +183,7 @@
               "name": "RTX 4090 能跑多大的 LLM？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "RTX 4090 拥有 24 GB GDDR6X 显存（1.0 TB/s 带宽）。BF16 精度下可运行约 13B 以内的模型；INT4/Q4_K 量化下可运行约 34B；使用 Q2_K 极限压缩可尝试 70B。推荐配置：7B–13B BF16 高质量推理，34B INT4 兼顾质量与速度。TPS Calculator 可精确计算每种组合是否 OOM。"
+                "text": "RTX 4090 有 24 GB 显存。能否运行某个模型取决于实际参数量、权重格式、KV Cache、上下文、批大小、运行时工作区和可用显存比例，不能只用一个固定的参数量上限判断。TPS Calculator 会逐项估算这些开销；接近容量边界的结果仍应在目标框架中实测。"
               }
             },
             {
@@ -191,7 +191,7 @@
               "name": "RTX 4090 和 A100 推理速度差多少？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "A100 80GB SXM 内存带宽约 2 TB/s，RTX 4090 约 1 TB/s，带宽是推理（Decode）速度的决定因素。相同模型相同量化下，A100 Decode TPS 约是 RTX 4090 的 1.8–2 倍。但 A100 显存更大（80 GB vs 24 GB），能运行更大模型，且支持 NVLink 多卡互联。"
+                "text": "A100 SXM 与 RTX 4090 的显存容量、带宽、低精度算力、互联和软件栈均不同。Decode 经常受显存带宽限制，但小模型、高批量或长 prompt 也可能受计算限制，因此不存在通用的固定倍数。应使用相同模型、量化、批大小、上下文和框架进行比较。"
               }
             },
             {
@@ -199,7 +199,7 @@
               "name": "H100 和 A100 推理速度差多少？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "H100 SXM 内存带宽 3.35 TB/s，A100 SXM 约 2 TB/s，H100 约快 1.6–1.7 倍。同时 H100 支持 FP8 原生量化，可在基本不损失精度的情况下将显存减半、吞吐提升近 2 倍。对于 LLM 推理，H100 综合性能通常是 A100 的 2–3 倍。"
+                "text": "H100 SXM 的峰值带宽和低精度算力高于 A100 SXM，并增加了原生 FP8 能力；但真实提升取决于模型是否受带宽或计算限制、所用精度、批大小、内核和通信。FP8 的精度影响也依赖量化方法，不能保证固定的 2–3 倍速度或无损质量。"
               }
             },
             {
@@ -207,7 +207,7 @@
               "name": "QwQ 32B 在 RTX 3090 上能运行吗？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "QwQ-32B 在 BF16 精度下约需 64 GB 显存，单张 RTX 3090（24 GB）不够。INT4/Q4_K 量化约需 18 GB，可在单张 RTX 3090 上运行，llama.cpp 框架 Decode TPS 约 25–40 token/s。2 张 RTX 3090（NVLink 或 CPU 卸载）可运行 INT8 量化，速度约 40–60 token/s。"
+                "text": "QwQ-32B 的 BF16 裸权重约 64 GB，无法放入单张 24 GB RTX 3090。Q4 类文件约占 18 GB，可能在短上下文和合适运行时设置下单卡运行，但剩余空间还要容纳 KV Cache、工作区和显存预留。实际速度取决于具体 GGUF、上下文、GPU 卸载层数和内核。"
               }
             },
             {
@@ -215,7 +215,7 @@
               "name": "Gemma 3 27B 在 A100 上推理速度是多少？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Gemma-3-27B 在单张 A100 80GB（BF16，约 54 GB）下，vLLM 框架 Decode TPS 约 600–900 token/s。Gemma-3 采用混合注意力（全局注意力 + 局部滑动窗口），KV Cache 占用比同规模 Dense 模型小约 5 倍，可支持更长上下文。"
+                "text": "Gemma-3-27B 的 BF16 裸权重约 54 GB，通常可放入单张 A100 80GB，但仍需为 KV Cache 和运行时留出空间。其全局与局部滑动窗口混合注意力可减少 KV Cache 增长；具体节省量和 TPS 仍随上下文、批大小、框架与内核变化。"
               }
             },
             {
@@ -223,7 +223,7 @@
               "name": "Mistral 7B 在 RTX 4080 上跑多快？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Mistral-7B 在 RTX 4080（16 GB，717 GB/s 带宽）上，BF16 精度（约 14 GB，刚好可放入）vLLM Decode TPS 约 500–700 token/s，llama.cpp Q4_K 约 150–200 token/s。RTX 4080 显存偏小，推荐 7B 及以下模型使用 BF16，13B 以上需 INT4 量化。"
+                "text": "Mistral-7B 的 BF16 裸权重约 14 GB，在 16 GB RTX 4080 上非常接近容量上限；加入 KV Cache、工作区和框架显存预留后可能 OOM，量化通常更稳妥。实际速度取决于上下文、批大小、精度、框架和内核效率。"
               }
             },
             {
@@ -231,7 +231,7 @@
               "name": "Apple M3 Max 能跑 Llama 3 吗？速度如何？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Apple M3 Max（128 GB 统一内存，400 GB/s 带宽）支持运行 Llama-3.1-70B Q4_K 量化（约 40 GB），使用 llama.cpp 或 MLX 框架约 30–50 token/s；Llama-3.2-3B BF16（约 6 GB）约 200+ token/s。M3 Max 是目前本地运行大模型性价比最高的消费级平台之一。"
+                "text": "128 GB 统一内存的 Apple M3 Max 在容量上可容纳 Llama-3.1-70B 的 Q4 类权重以及合理的 KV Cache，但操作系统也会占用统一内存。实际速度取决于具体芯片配置、量化文件、上下文和 llama.cpp/MLX 版本；本站对 Apple 算力与功耗使用公开规格推导值，因此结果标为中等置信度。"
               }
             },
             {
@@ -239,7 +239,7 @@
               "name": "vLLM 和 llama.cpp 推理速度差多少？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "vLLM 针对服务端批处理优化，适合高并发场景（batch≥4），GPU 利用率高；llama.cpp 适合本地单用户/CPU+GPU 混合部署，batch=1 时两者差距缩小。以 Llama-3.1-8B 在 RTX 4090 BF16 为例：vLLM batch=1 约 800 TPS，llama.cpp Q4_K 约 200 TPS。高并发时 vLLM 优势更明显（吞吐量可达 5–10 倍）。"
+                "text": "vLLM 面向 GPU 服务与连续批处理，llama.cpp 面向广泛硬件、GGUF 和 CPU/GPU 混合部署。两者使用的量化、内核、调度和工作负载可能不同，因此没有通用速度倍数；应在相同模型、精度、批量、上下文和并发条件下比较。"
               }
             },
             {
@@ -247,7 +247,7 @@
               "name": "部署 70B 大模型需要几张 GPU？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "以 Llama-3.1-70B 为例：BF16 精度约需 140 GB 显存，需 2 张 A100/H100 80GB 或 6 张 RTX 4090；INT4 量化约 35 GB，可在 1 张 A100 80GB 或 2 张 RTX 4090 上运行。MoE 模型（如 Mixtral 8x7B）激活参数只有 13B，INT4 量化约 26 GB，单张 RTX 4090 内运行。TPS Calculator 可自动计算最少卡数需求。"
+                "text": "以 Llama-3.1-70B 为例，裸权重约需 140 GB（BF16）或 35 GB（INT4）。BF16 通常至少需要两张 80 GB 卡，INT4 通常可放入一张 80 GB 卡或两张 24 GB 卡，但都要再考虑 KV Cache、工作区、框架预留和并行方式。MoE 也必须容纳所有驻留专家权重，不能仅按激活参数判断卡数。"
               }
             },
             {
@@ -255,20 +255,20 @@
               "name": "国产 GPU 昇腾 910B 跑 LLM 速度怎么样？",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "华为昇腾 910B 拥有 64 GB HBM2e 显存，内存带宽约 2 TB/s，算力与 A100 接近。在 MindIE/vLLM（昇腾版）框架下运行 Llama/Qwen 系列模型，理论推理速度与 A100 同量级。TPS Calculator 支持昇腾 910B/910C 的 TPS 和显存占用估算。"
+                "text": "本站可根据昇腾 910B/910C 的公开容量、带宽和峰值算力做工程估算，但不会据此断言与某款 NVIDIA GPU 有固定速度关系。真实表现高度依赖 CANN/MindIE 版本、算子覆盖、量化格式、模型适配和集群拓扑，应以目标软件栈的实测结果为准。"
               }
             }
           ]
         },
         {
           "@type": "Organization",
-          "@id": "https://tps.bunai.com/#organization",
+          "@id": "https://tps.bunai.cc/#organization",
           "name": "TPS Calculator",
-          "url": "https://tps.bunai.com/",
+          "url": "https://tps.bunai.cc/",
           "description": "提供 GPU 推理性能估算工具，帮助 AI 工程师和开发者选型 GPU、量化方案与推理框架",
           "logo": {
             "@type": "ImageObject",
-            "url": "https://tps.bunai.com/favicon.svg",
+            "url": "https://tps.bunai.cc/favicon.svg",
             "width": 512,
             "height": 512
           },
@@ -284,7 +284,7 @@
     <!-- GEO: 静态语义内容，供不执行 JS 的 LLM/AI 爬虫读取 -->
     <main id="static-content" style="display:none" aria-hidden="true">
       <h1>GPU 推理速度计算器 · TPS Calculator</h1>
-      <p>在线估算大语言模型（LLM）在各类 GPU 上的推理速度（TPS）、显存占用与延迟的免费工具。支持 348+ 主流开源模型，覆盖 170+ GPU。</p>
+      <p>在线估算大语言模型（LLM）在各类 GPU 上的推理速度（TPS）、显存占用与延迟的免费工具。支持 368 个规范模型，覆盖 250 个硬件条目。</p>
 
       <h2>核心功能</h2>
       <ul>
@@ -297,10 +297,10 @@
       </ul>
 
       <h2>支持的 GPU</h2>
-      <p>覆盖 170+ GPU，包括 NVIDIA H100/A100/H200/RTX 4090、AMD MI300X/RX 7900 XTX、Apple M1/M2/M3/M4 全系列、Intel Gaudi 2/3、昇腾 910B/910C 等国产芯片。</p>
+      <p>覆盖 250 个硬件条目，包括 NVIDIA H100/A100/H200/RTX 4090、AMD MI300X/RX 7900 XTX、Apple M1/M2/M3/M4/M5 系列、Intel Gaudi 2/3、昇腾 910B/910C 等国产芯片。</p>
 
       <h2>支持的模型</h2>
-      <p>覆盖 348+ 主流开源模型：DeepSeek-R1（671B MoE）、DeepSeek-V3、Qwen3（0.6B–235B）、Qwen2.5、Llama 3.1/3.2/3.3（1B–405B）、Gemma 2/3、Mistral/Mixtral、ChatGLM/GLM-4、Baichuan、Yi、Falcon、Phi、Bloom 等。</p>
+      <p>覆盖 368 个规范模型：DeepSeek-R1（671B MoE）、DeepSeek-V3、Qwen3（0.6B–235B）、Qwen2.5、Llama 3.1/3.2/3.3（1B–405B）、Gemma 2/3/4、Mistral/Mixtral、ChatGLM/GLM-4、Baichuan、Yi、Falcon、Phi、Bloom 等。</p>
 
       <h2>支持的量化精度</h2>
       <p>FP32、BF16、FP16、FP8、INT8、INT4、Q6_K、Q5_K、Q4_K、Q3_K、Q2_K、INT2</p>
@@ -310,9 +310,9 @@
 
       <h2>页面</h2>
       <ul>
-        <li><a href="https://tps.bunai.com/">首页 / 计算器</a>：输入 GPU + 模型 + 参数，即时估算推理性能</li>
-        <li><a href="https://tps.bunai.com/ranking">模型排行榜</a>：给定 GPU，查看所有可运行模型的速度排名</li>
-        <li><a href="https://tps.bunai.com/library">支持列表</a>：查询已支持的所有 GPU 和模型的详细参数</li>
+        <li><a href="https://tps.bunai.cc/">首页 / 计算器</a>：输入 GPU + 模型 + 参数，即时估算推理性能</li>
+        <li><a href="https://tps.bunai.cc/ranking">模型排行榜</a>：给定 GPU，查看所有可运行模型的速度排名</li>
+        <li><a href="https://tps.bunai.cc/library">支持列表</a>：查询已支持的所有 GPU 和模型的详细参数</li>
       </ul>
     </main>
     <div id="app"></div>

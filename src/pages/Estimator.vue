@@ -12,8 +12,19 @@ import ResultPanel from '../components/result/ResultPanel.vue'
 import { GPU_LIST } from '../data/gpus/index.js'
 import { ALL_MODELS } from '../data/models/index.js'
 import { QUANT_MAP, INTERCONNECT_MAP, FRAMEWORK_MAP } from '../data/constants.js'
-import { KV_CACHE_MAP, PCIE_BW_OPTIONS, CPU_MEM_BW_OPTIONS, PCIE_WIDTH_OPTIONS } from '../data/runtime.js'
-import { calcAll, calcBatchSweep, aggregateGpuSlots } from '../utils/calc.js'
+import {
+  KV_CACHE_MAP,
+  PCIE_BW_OPTIONS,
+  PCIE_WIDTH_OPTIONS,
+  normalizeRamCapacity,
+  resolveCpuMemBwOption,
+} from '../data/runtime.js'
+import { calcAll, calcBatchSweep, aggregateGpuSlots, getQuantBytes } from '../utils/calc.js'
+import {
+  getDefaultGpuMemoryUtilization,
+  normalizeGpuMemoryUtilization,
+  supportsRuntimeFeature,
+} from '../utils/runtime.js'
 import { readUrlState, resolveUrlState, watchUrlState } from '../utils/useUrlState.js'
 
 const { t } = useI18n()
@@ -23,7 +34,7 @@ const defaultModel = ALL_MODELS.find(m => m.id === 'gemma4_12b_unified') ?? ALL_
 
 const gpuSlots       = ref(_url.gpuSlots     ?? [{ gpu: GPU_LIST.find(g => g.id === 'rtx4090') ?? GPU_LIST[0], count: 1 }])
 const gpuCount       = computed(() => gpuSlots.value.reduce((s, g) => s + g.count, 0))
-const interconnect   = ref(_url.interconnect ?? INTERCONNECT_MAP[0])
+const interconnect   = ref(_url.interconnect ?? INTERCONNECT_MAP.find(i => i.id === 'pcie4') ?? INTERCONNECT_MAP[0])
 const model          = ref(_url.model        ?? defaultModel)
 const quant          = ref(_url.quant        ?? QUANT_MAP.find(q => q.id === 'bf16'))
 const ctx            = ref(_url.ctx          ?? Math.min(model.value?.max_ctx ?? 16384, 16384))
@@ -31,24 +42,37 @@ const batch          = ref(_url.batch        ?? 1)
 const promptLen      = ref(_url.promptLen    ?? 1024)
 const outputLen      = ref(_url.outputLen    ?? 1024)
 const framework      = ref(_url.framework    ?? FRAMEWORK_MAP.find(f => f.id === 'theory'))
+const gpuMemoryUtilization = ref(_url.gpuMemoryUtilization ?? getDefaultGpuMemoryUtilization(
+  framework.value,
+  gpuSlots.value[0]?.gpu,
+))
 const flashAttention = ref(_url.flashAttention ?? true)
 const kvCacheQuant   = ref(_url.kvCacheQuant ?? KV_CACHE_MAP[0])
 const prefixCacheHit = ref(_url.prefixCacheHit ?? 0)
 // 共享内存（iGPU 专用）
 const sharedVram     = ref(_url.sharedVram    ?? 16)
-// 只有 MoE 模型放不下显存时（INT4 权重 > 可用显存）才自动开启 CPU 卸载
-function needsCpuOffload(m, g, n) {
+// Only auto-enable MoE offload when the currently selected serialization
+// cannot fit by weight capacity alone. The full result still checks KV,
+// activations, runtime overhead, and host RAM.
+function needsCpuOffload(m, g, n, q, fw, memoryUtilization) {
   if (!m || m.type !== 'moe' || !m.active_params) return false
-  const weightGB = m.params * 0.5  // INT4 bytes per param
-  const totalVram = (g?.vram ?? 0) * (n ?? 1) * (g?.usableRatio ?? 1.0)
+  if (g?.unifiedMemory || g?.sharedMemory) return false
+  const weightGB = m.params * getQuantBytes(q, g, fw)
+  const usableRatio = normalizeGpuMemoryUtilization(
+    memoryUtilization,
+    getDefaultGpuMemoryUtilization(fw, g),
+  )
+  const totalVram = (g?.vram ?? 0) * (n ?? 1) * usableRatio
   return weightGB > totalVram
 }
-const cpuOffload     = ref(_url.cpuOffload   ?? needsCpuOffload(model.value, gpuSlots.value[0]?.gpu, gpuCount.value))
+const pureCpu        = ref(_url.pureCpu      ?? false)
+const cpuOffloadMode = ref(pureCpu.value ? 'off' : (_url.cpuOffloadMode ?? 'auto'))
+const cpuOffload     = ref(false)
 const pcieBw         = ref(_url.pcieBw       ?? PCIE_BW_OPTIONS[1])
 const pcieWidth      = ref(_url.pcieWidth     ?? PCIE_WIDTH_OPTIONS[1])  // 默认 x8
-const pureCpu        = ref(_url.pureCpu      ?? false)
-const cpuMemBw       = ref(_url.cpuMemBw     ?? CPU_MEM_BW_OPTIONS[3])  // 默认 DDR5-4800
-const sysRam         = ref(_url.sysRam       ?? 64)  // 默认 64 GB
+const cpuMemBw       = ref(_url.cpuMemBw     ?? resolveCpuMemBwOption('ddr5_4800'))
+const cpuTflops      = ref(_url.cpuTflops     ?? null)
+const sysRam         = ref(normalizeRamCapacity(_url.sysRam, 64))
 
 // 共享内存 iGPU：用用户设置的共享内存大小覆盖 vram=0
 const effectiveGpu = computed(() => {
@@ -59,9 +83,20 @@ const effectiveGpu = computed(() => {
   })
   return slots.length === 1 ? slots[0].gpu : aggregateGpuSlots(slots)
 })
+const calculationGpu = computed(() => {
+  if (!effectiveGpu.value) return null
+  return {
+    ...effectiveGpu.value,
+    usableRatio: normalizeGpuMemoryUtilization(
+      gpuMemoryUtilization.value,
+      getDefaultGpuMemoryUtilization(framework.value, effectiveGpu.value),
+    ),
+  }
+})
 const speculativeDecoding = ref(_url.speculativeDecoding ?? false)
 const acceptanceRate = ref(_url.acceptanceRate ?? 0.7)
 const draftLen       = ref(_url.draftLen       ?? 4)
+const draftModelParams = ref(_url.draftModelParams ?? 1)
 const ppCount        = ref(_url.ppCount        ?? 1)
 const epCount        = ref(_url.epCount        ?? 1)
 const imageCount     = ref(_url.imageCount     ?? 0)
@@ -85,6 +120,10 @@ function pinCurrentResult() {
     batch: batch.value,
     interconnect: interconnect.value,
     cpuOffload: cpuOffload.value,
+    pureCpu: pureCpu.value,
+    cpuMemBw: { ...cpuMemBw.value },
+    cpuTflops: cpuTflops.value,
+    gpuMemoryUtilization: gpuMemoryUtilization.value,
     pcieBw: pcieBw.value,
     pcieWidth: pcieWidth.value,
     flashAttention: flashAttention.value,
@@ -93,7 +132,9 @@ function pinCurrentResult() {
     speculativeDecoding: speculativeDecoding.value,
     acceptanceRate: acceptanceRate.value,
     draftLen: draftLen.value,
+    draftModelParams: draftModelParams.value,
     ppCount: ppCount.value,
+    epCount: epCount.value,
     imageCount: imageCount.value,
     promptLen: promptLen.value,
     outputLen: outputLen.value,
@@ -112,6 +153,10 @@ function goToUpgrade() {
   
   // 构建升级模式的 URL 参数
   const query = {
+    // Estimator controls synchronize directly to the address bar. Read the
+    // live URL here so every changed setting reaches Solver even if Vue
+    // Router's currentRoute object has not reacted to replaceState yet.
+    ...Object.fromEntries(new URLSearchParams(window.location.search)),
     upgrade: '1',
     gpus: gpuSlots.value.map(s => `${s.gpu.id}:${s.count}`).join(','),
     model: model.value.id,
@@ -121,27 +166,102 @@ function goToUpgrade() {
     b: batch.value,
     pl: promptLen.value,
     ol: outputLen.value,
+    // Upgrade solving must reproduce the configuration that produced this
+    // result. Snapshot an automatic offload decision as its effective state;
+    // otherwise an omitted `co` parameter is parsed as "auto" by the solver
+    // and was previously treated as disabled.
+    co: cpuOffloadMode.value === 'auto'
+      ? (cpuOffload.value ? 'on' : 'off')
+      : cpuOffloadMode.value,
   }
   
   router.push({ path: '/solver', query })
 }
 
-watch(model, (m, prev) => {
+watch(model, m => {
   if (m?.max_ctx) ctx.value = Math.min(m.max_ctx, 16384)
-  // MoE 模型：仅在放不下显存时才自动开启 CPU 卸载；能放下则关闭；切换到非 MoE 时关闭
-  if (m?.type === 'moe' && m?.active_params) {
-    cpuOffload.value = needsCpuOffload(m, effectiveGpu.value, gpuCount.value)
-  } else if (prev?.type === 'moe') {
+})
+
+watch(
+  [
+    cpuOffloadMode,
+    pureCpu,
+    model,
+    effectiveGpu,
+    gpuCount,
+    quant,
+    framework,
+    gpuMemoryUtilization,
+  ],
+  ([mode, cpuOnly, selectedModel, selectedGpu, count, selectedQuant, selectedFramework, memoryUtilization]) => {
+    if (cpuOnly) {
+      cpuOffload.value = false
+      return
+    }
+    const supported = Boolean(
+      selectedGpu
+      && !selectedGpu.unifiedMemory
+      && !selectedGpu.sharedMemory
+      && supportsRuntimeFeature(selectedFramework, 'cpuOffload')
+      && (selectedModel?.type === 'moe' || selectedFramework?.id === 'llamacpp')
+    )
+    if (!supported || mode === 'off') {
+      cpuOffload.value = false
+      return
+    }
+    if (mode === 'on') {
+      cpuOffload.value = true
+      return
+    }
+    cpuOffload.value = needsCpuOffload(
+      selectedModel,
+      selectedGpu,
+      count,
+      selectedQuant,
+      selectedFramework,
+      memoryUtilization,
+    )
+  },
+  { immediate: true },
+)
+
+// CPU-only and GPU+CPU offload are alternative execution modes. Keep them
+// exclusive even when values come from URL/session state rather than buttons.
+watch(pureCpu, enabled => {
+  if (enabled) {
+    cpuOffloadMode.value = 'off'
     cpuOffload.value = false
   }
 })
+watch(cpuOffload, enabled => {
+  if (enabled && pureCpu.value) pureCpu.value = false
+})
 
-watch(() => gpuSlots.value[0]?.gpu, (g) => {
-  if (g?.vendor === 'apple') {
+watch(sysRam, value => {
+  const normalized = normalizeRamCapacity(value, 64)
+  if (value !== normalized) sysRam.value = normalized
+})
+
+watch([() => gpuSlots.value[0]?.gpu, pureCpu], ([g, cpuOnly]) => {
+  if (cpuOnly) {
+    const llamaCpp = FRAMEWORK_MAP.find(f => f.id === 'llamacpp')
+    if (llamaCpp) framework.value = llamaCpp
+    return
+  }
+  if (!g) return
+  if (g.vendor === 'apple') {
     const mlxFw = FRAMEWORK_MAP.find(f => f.id === 'mlx')
     if (mlxFw) framework.value = mlxFw
+    return
   }
-})
+  const currentSupported = !framework.value?.vendors || framework.value.vendors.includes(g.vendor)
+  if (!currentSupported) {
+    framework.value = FRAMEWORK_MAP.find(f =>
+      ['vllm', 'llamacpp', 'theory'].includes(f.id)
+      && (!f.vendors || f.vendors.includes(g.vendor))
+    ) ?? FRAMEWORK_MAP.find(f => f.id === 'theory')
+  }
+}, { immediate: true })
 
 // llama.cpp hybrid 模式失效时重置 nglCount
 watch([cpuOffload, framework], ([co, fw]) => {
@@ -150,22 +270,25 @@ watch([cpuOffload, framework], ([co, fw]) => {
 
 watchUrlState({ gpuSlots, interconnect, model, quant, ctx, batch,
   promptLen, outputLen, framework, flashAttention, kvCacheQuant,
-  prefixCacheHit, cpuOffload, pcieBw, pcieWidth, pureCpu, cpuMemBw, sysRam,
-  speculativeDecoding, acceptanceRate, draftLen, ppCount, epCount, imageCount, sharedVram, nglCount })
+  prefixCacheHit, cpuOffload, cpuOffloadMode, pcieBw, pcieWidth, pureCpu,
+  cpuMemBw, cpuTflops, gpuMemoryUtilization, sysRam,
+  speculativeDecoding, acceptanceRate, draftLen, draftModelParams,
+  ppCount, epCount, imageCount, sharedVram, nglCount })
 
 const result = computed(() => {
-  if (!effectiveGpu.value || !model.value || !quant.value || !framework.value) return null
+  if (!calculationGpu.value || !model.value || !quant.value || !framework.value) return null
   try {
     return { ...calcAll({
-      gpu: effectiveGpu.value, gpuCount: gpuCount.value, interconnect: interconnect.value,
+      gpu: calculationGpu.value, gpuCount: gpuCount.value, interconnect: interconnect.value,
       model: model.value, quant: quant.value, ctx: ctx.value, batch: batch.value,
       promptLen: promptLen.value, outputLen: outputLen.value, framework: framework.value,
       flashAttention: flashAttention.value, kvCacheQuant: kvCacheQuant.value,
       prefixCacheHit: prefixCacheHit.value, cpuOffload: cpuOffload.value, pcieBw: pcieBw.value,
       pcieWidth: pcieWidth.value,
-      pureCpu: pureCpu.value, cpuMemBw: cpuMemBw.value,
+      pureCpu: pureCpu.value, cpuMemBw: cpuMemBw.value, cpuTflops: cpuTflops.value,
       sysRam: sysRam.value,
-      speculativeDecoding: speculativeDecoding.value, acceptanceRate: acceptanceRate.value, draftLen: draftLen.value,
+      speculativeDecoding: speculativeDecoding.value, acceptanceRate: acceptanceRate.value,
+      draftLen: draftLen.value, draftModelParams: draftModelParams.value,
       ppCount: ppCount.value,
       epCount: epCount.value,
       imageCount: imageCount.value,
@@ -178,19 +301,23 @@ const result = computed(() => {
 })
 
 const quantMatrix = computed(() => {
-  if (!effectiveGpu.value || !model.value || !framework.value) return []
+  if (!calculationGpu.value || !model.value || !framework.value) return []
   return QUANT_MAP.map(q => {
     try {
       const r = calcAll({
-        gpu: effectiveGpu.value, gpuCount: gpuCount.value, interconnect: interconnect.value,
+        gpu: calculationGpu.value, gpuCount: gpuCount.value, interconnect: interconnect.value,
         model: model.value, quant: q, ctx: ctx.value, batch: batch.value,
         promptLen: promptLen.value, outputLen: outputLen.value, framework: framework.value,
         flashAttention: flashAttention.value, kvCacheQuant: kvCacheQuant.value,
         prefixCacheHit: prefixCacheHit.value, cpuOffload: cpuOffload.value, pcieBw: pcieBw.value,
         pcieWidth: pcieWidth.value,
-        pureCpu: pureCpu.value, cpuMemBw: cpuMemBw.value,
-        speculativeDecoding: speculativeDecoding.value, acceptanceRate: acceptanceRate.value, draftLen: draftLen.value,
-        ppCount: ppCount.value,        nglCount: nglCount.value,      })
+        pureCpu: pureCpu.value, cpuMemBw: cpuMemBw.value, cpuTflops: cpuTflops.value,
+        sysRam: sysRam.value,
+        speculativeDecoding: speculativeDecoding.value, acceptanceRate: acceptanceRate.value,
+        draftLen: draftLen.value, draftModelParams: draftModelParams.value,
+        ppCount: ppCount.value, epCount: epCount.value,
+        imageCount: imageCount.value, nglCount: nglCount.value,
+      })
       // 当前行 OOM 且未开启 CPU 卸载时，额外计算"启用卸载后能否容纳"
       let cpuOffloadFeasible = false
       let offloadVramGB = null
@@ -198,21 +325,46 @@ const quantMatrix = computed(() => {
         try {
           const fallbackPcie = pcieBw.value ?? INTERCONNECT_MAP.find(x => x.id === 'pcie4')
           const ro = calcAll({
-            gpu: effectiveGpu.value, gpuCount: gpuCount.value, interconnect: interconnect.value,
+            gpu: calculationGpu.value, gpuCount: gpuCount.value, interconnect: interconnect.value,
             model: model.value, quant: q, ctx: ctx.value, batch: batch.value,
             promptLen: promptLen.value, outputLen: outputLen.value, framework: framework.value,
             flashAttention: flashAttention.value, kvCacheQuant: kvCacheQuant.value,
             prefixCacheHit: prefixCacheHit.value, cpuOffload: true, pcieBw: fallbackPcie,
             pcieWidth: pcieWidth.value,
-            pureCpu: false, cpuMemBw: cpuMemBw.value,
-            speculativeDecoding: speculativeDecoding.value, acceptanceRate: acceptanceRate.value, draftLen: draftLen.value,
-            ppCount: ppCount.value,
+            pureCpu: false, cpuMemBw: cpuMemBw.value, cpuTflops: cpuTflops.value,
+            sysRam: sysRam.value,
+            speculativeDecoding: speculativeDecoding.value, acceptanceRate: acceptanceRate.value,
+            draftLen: draftLen.value, draftModelParams: draftModelParams.value,
+            ppCount: ppCount.value, epCount: epCount.value,
+            imageCount: imageCount.value,
           })
-          cpuOffloadFeasible = ro.vramOk
+          cpuOffloadFeasible = ro.fitOk
           offloadVramGB = ro.displayNeeded ?? ro.totalNeeded
         } catch { /* ignore */ }
       }
-      return { quant: q, vramGB: r.displayNeeded ?? r.totalNeeded, vramOk: r.vramOk, vramPct: r.vramPct, decodeToks: r.decodeToks, cpuOffloadFeasible, offloadVramGB }
+      return {
+        quant: q,
+        vramGB: r.pureCpu ? r.cpuRamNeededGB : (r.displayNeeded ?? r.totalNeeded),
+        memoryOk: r.pureCpu ? r.ramOk : r.vramOk && r.ramOk,
+        configurationOk: Boolean(
+          r.workloadInputOk
+          && r.contextOk
+          && r.topologyOk
+          && r.modeOk
+          && r.kvCacheSupported
+          && r.runtimeConfigurationSupported
+          && r.computePrecisionSupported
+          && r.modelDataOk
+        ),
+        fitOk: r.fitOk,
+        memoryPct: r.pureCpu
+          ? r.cpuRamNeededGB / Math.max(r.availableSysRamGB ?? 0, 1e-9) * 100
+          : r.vramPct,
+        decodeToks: r.decodeToks,
+        effectiveToks: r.effectiveToks,
+        cpuOffloadFeasible,
+        offloadVramGB,
+      }
     } catch { return null }
   }).filter(Boolean)
 })
@@ -224,33 +376,65 @@ const pinnedQuantMatrix = computed(() => {
   return QUANT_MAP.map(q => {
     try {
       const r = calcAll({
-        gpu: c.gpu, gpuCount: c.gpuCount, interconnect: c.interconnect,
+        gpu: { ...c.gpu, usableRatio: c.gpuMemoryUtilization }, gpuCount: c.gpuCount, interconnect: c.interconnect,
         model: c.model, quant: q, ctx: c.ctx, batch: c.batch,
         promptLen: c.promptLen, outputLen: c.outputLen, framework: c.framework,
         flashAttention: c.flashAttention, kvCacheQuant: c.kvCacheQuant,
         prefixCacheHit: c.prefixCacheHit, cpuOffload: c.cpuOffload, pcieBw: c.pcieBw,
-        speculativeDecoding: c.speculativeDecoding, acceptanceRate: c.acceptanceRate, draftLen: c.draftLen,
-        ppCount: c.ppCount,        nglCount: c.nglCount,      })
+        pcieWidth: c.pcieWidth,
+        pureCpu: c.pureCpu, cpuMemBw: c.cpuMemBw, cpuTflops: c.cpuTflops,
+        sysRam: c.sysRam,
+        speculativeDecoding: c.speculativeDecoding, acceptanceRate: c.acceptanceRate,
+        draftLen: c.draftLen, draftModelParams: c.draftModelParams,
+        ppCount: c.ppCount, epCount: c.epCount,
+        imageCount: c.imageCount, nglCount: c.nglCount,
+      })
       // 当前行 OOM 且未开启 CPU 卸载时，额外计算"启用卸载后能否容纳"
       let cpuOffloadFeasible = false
       let offloadVramGB = null
       if (!r.vramOk && !c.cpuOffload && c.model?.type === 'moe' && c.model?.active_params) {
         try {
           const ro = calcAll({
-            gpu: c.gpu, gpuCount: c.gpuCount, interconnect: c.interconnect,
+            gpu: { ...c.gpu, usableRatio: c.gpuMemoryUtilization }, gpuCount: c.gpuCount, interconnect: c.interconnect,
             model: c.model, quant: q, ctx: c.ctx, batch: c.batch,
             promptLen: c.promptLen, outputLen: c.outputLen, framework: c.framework,
             flashAttention: c.flashAttention, kvCacheQuant: c.kvCacheQuant,
             prefixCacheHit: c.prefixCacheHit, cpuOffload: true, pcieBw: c.pcieBw,
-            pureCpu: false, cpuMemBw: null,
-            speculativeDecoding: c.speculativeDecoding, acceptanceRate: c.acceptanceRate, draftLen: c.draftLen,
-            ppCount: c.ppCount,
+            pcieWidth: c.pcieWidth,
+            pureCpu: false, cpuMemBw: c.cpuMemBw, cpuTflops: c.cpuTflops,
+            sysRam: c.sysRam,
+            speculativeDecoding: c.speculativeDecoding, acceptanceRate: c.acceptanceRate,
+            draftLen: c.draftLen, draftModelParams: c.draftModelParams,
+            ppCount: c.ppCount, epCount: c.epCount,
+            imageCount: c.imageCount,
           })
-          cpuOffloadFeasible = ro.vramOk
+          cpuOffloadFeasible = ro.fitOk
           offloadVramGB = ro.displayNeeded ?? ro.totalNeeded
         } catch { /* ignore */ }
       }
-      return { quant: q, vramGB: r.displayNeeded ?? r.totalNeeded, vramOk: r.vramOk, vramPct: r.vramPct, decodeToks: r.decodeToks, cpuOffloadFeasible, offloadVramGB }
+      return {
+        quant: q,
+        vramGB: r.pureCpu ? r.cpuRamNeededGB : (r.displayNeeded ?? r.totalNeeded),
+        memoryOk: r.pureCpu ? r.ramOk : r.vramOk && r.ramOk,
+        configurationOk: Boolean(
+          r.workloadInputOk
+          && r.contextOk
+          && r.topologyOk
+          && r.modeOk
+          && r.kvCacheSupported
+          && r.runtimeConfigurationSupported
+          && r.computePrecisionSupported
+          && r.modelDataOk
+        ),
+        fitOk: r.fitOk,
+        memoryPct: r.pureCpu
+          ? r.cpuRamNeededGB / Math.max(r.availableSysRamGB ?? 0, 1e-9) * 100
+          : r.vramPct,
+        decodeToks: r.decodeToks,
+        effectiveToks: r.effectiveToks,
+        cpuOffloadFeasible,
+        offloadVramGB,
+      }
     } catch { return null }
   }).filter(Boolean)
 })
@@ -259,7 +443,7 @@ const pinnedBatchSweepData = computed(() => {
   if (!pinnedConfig.value) return []
   const c = pinnedConfig.value
   return calcBatchSweep({
-    gpu: c.gpu, gpuCount: c.gpuCount, model: c.model, quant: c.quant,
+    gpu: { ...c.gpu, usableRatio: c.gpuMemoryUtilization }, gpuCount: c.gpuCount, model: c.model, quant: c.quant,
     ctx: c.ctx, batch: c.batch, framework: c.framework,
     interconnect: c.interconnect,
     promptLen: c.promptLen, outputLen: c.outputLen,
@@ -267,16 +451,22 @@ const pinnedBatchSweepData = computed(() => {
     prefixCacheHit: c.prefixCacheHit, cpuOffload: c.cpuOffload,
     pcieBw: c.pcieBw, speculativeDecoding: c.speculativeDecoding,
     acceptanceRate: c.acceptanceRate, draftLen: c.draftLen,
+    draftModelParams: c.draftModelParams,
     ppCount: c.ppCount, imageCount: c.imageCount,
     nglCount: c.nglCount,
     pcieWidth: c.pcieWidth,
+    pureCpu: c.pureCpu,
+    cpuMemBw: c.cpuMemBw,
+    cpuTflops: c.cpuTflops,
+    sysRam: c.sysRam,
+    epCount: c.epCount,
   })
 })
 
 const batchSweepData = computed(() => {
-  if (!effectiveGpu.value || !model.value || !quant.value) return []
+  if (!calculationGpu.value || !model.value || !quant.value) return []
   return calcBatchSweep({
-    gpu: effectiveGpu.value,
+    gpu: calculationGpu.value,
     gpuCount: gpuCount.value,
     interconnect: interconnect.value,
     model: model.value,
@@ -293,12 +483,16 @@ const batchSweepData = computed(() => {
     pcieWidth: pcieWidth.value,
     pureCpu: pureCpu.value,
     cpuMemBw: cpuMemBw.value,
+    cpuTflops: cpuTflops.value,
     speculativeDecoding: speculativeDecoding.value,
     acceptanceRate: acceptanceRate.value,
     draftLen: draftLen.value,
+    draftModelParams: draftModelParams.value,
     ppCount: ppCount.value,
+    epCount: epCount.value,
     imageCount: imageCount.value,
     nglCount: nglCount.value,
+    sysRam: sysRam.value,
   })
 })
 </script>
@@ -306,11 +500,14 @@ const batchSweepData = computed(() => {
 <template>
   <div class="min-h-screen bg-gray-50 overflow-x-hidden pt-12 sm:pt-14 pb-20 sm:pb-0">
     <TopBar
-      :result="result" :model="model" :gpu="effectiveGpu" :gpu-count="gpuCount"
+      :result="result" :model="model" :gpu="calculationGpu" :gpu-count="gpuCount"
       :interconnect="interconnect" :quant="quant" :framework="framework"
       :ctx="ctx" :batch="batch" :prompt-len="promptLen" :output-len="outputLen"
       :flash-attention="flashAttention" :kv-cache-quant="kvCacheQuant"
       :prefix-cache-hit="prefixCacheHit" :cpu-offload="cpuOffload" :pcie-bw="pcieBw"
+      :pcie-width="pcieWidth" :pure-cpu="pureCpu" :cpu-mem-bw="cpuMemBw"
+      :cpu-tflops="cpuTflops" :gpu-memory-utilization="gpuMemoryUtilization"
+      :sys-ram="sysRam"
     />
     <ScrollingNotice />
     <TwoColumn>
@@ -324,9 +521,13 @@ const batchSweepData = computed(() => {
           v-model:prefixCacheHit="prefixCacheHit" v-model:cpuOffload="cpuOffload"
           v-model:pcieBw="pcieBw" v-model:pureCpu="pureCpu" v-model:cpuMemBw="cpuMemBw"
           v-model:pcieWidth="pcieWidth" v-model:sysRam="sysRam"
-          :model="model" :framework="framework" :gpuCount="gpuCount"
+          v-model:gpuMemoryUtilization="gpuMemoryUtilization"
+          v-model:cpuTflops="cpuTflops" v-model:cpuOffloadMode="cpuOffloadMode"
+          :model="model" :framework="framework" :gpu="effectiveGpu" :gpuCount="gpuCount"
+          :gpu-shared-memory="Boolean(effectiveGpu?.unifiedMemory || effectiveGpu?.sharedMemory)"
           v-model:speculativeDecoding="speculativeDecoding"
           v-model:acceptanceRate="acceptanceRate" v-model:draftLen="draftLen"
+          v-model:draftModelParams="draftModelParams"
           v-model:ppCount="ppCount" v-model:imageCount="imageCount"
           v-model:nglCount="nglCount" v-model:epCount="epCount"
         />
@@ -374,16 +575,20 @@ const batchSweepData = computed(() => {
                   :current-batch="pinnedConfig.batch"
                   v-model:framework="pinnedConfig.framework"
                   v-model:quant="pinnedConfig.quant"
-                  :ctx="ctx"
+                  :ctx="pinnedConfig.ctx"
                   :batch="pinnedConfig.batch"
-                  :pp-count="ppCount"
-                  :ep-count="epCount"
-                  :kv-cache-quant="kvCacheQuant"
-                  :prefix-cache-hit="prefixCacheHit"
-                  :speculative-decoding="speculativeDecoding"
-                  :draft-len="draftLen"
-                  :cpu-offload="cpuOffload"
-                  :pure-cpu="pureCpu"
+                  :prompt-len="pinnedConfig.promptLen"
+                  :output-len="pinnedConfig.outputLen"
+                  :pp-count="pinnedConfig.ppCount"
+                  :ep-count="pinnedConfig.epCount"
+                  :kv-cache-quant="pinnedConfig.kvCacheQuant"
+                  :prefix-cache-hit="pinnedConfig.prefixCacheHit"
+                  :speculative-decoding="pinnedConfig.speculativeDecoding"
+                  :draft-len="pinnedConfig.draftLen"
+                  :cpu-offload="pinnedConfig.cpuOffload"
+                  :pure-cpu="pinnedConfig.pureCpu"
+                  :ngl-count="pinnedConfig.nglCount"
+                  :gpu-memory-utilization="pinnedConfig.gpuMemoryUtilization"
                 />
               </div>
             </div>
@@ -410,6 +615,8 @@ const batchSweepData = computed(() => {
                   v-model:quant="quant"
                   :ctx="ctx"
                   :batch="batch"
+                  :prompt-len="promptLen"
+                  :output-len="outputLen"
                   :pp-count="ppCount"
                   :ep-count="epCount"
                   :kv-cache-quant="kvCacheQuant"
@@ -418,6 +625,8 @@ const batchSweepData = computed(() => {
                   :draft-len="draftLen"
                   :cpu-offload="cpuOffload"
                   :pure-cpu="pureCpu"
+                  :gpu-memory-utilization="gpuMemoryUtilization"
+                  :ngl-count="nglCount"
                 />
               </div>
             </div>
@@ -428,7 +637,7 @@ const batchSweepData = computed(() => {
           <div v-if="result" class="flex justify-end items-center gap-2">
             <!-- 我想更快按钮 -->
             <button
-              v-if="result.vramOk"
+              v-if="result.fitOk"
               @click="goToUpgrade"
               class="hidden sm:flex text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors items-center gap-1.5"
             >
@@ -463,6 +672,8 @@ const batchSweepData = computed(() => {
             v-model:quant="quant"
             :ctx="ctx"
             :batch="batch"
+            :prompt-len="promptLen"
+            :output-len="outputLen"
             :pp-count="ppCount"
             :ep-count="epCount"
             :kv-cache-quant="kvCacheQuant"
@@ -471,6 +682,7 @@ const batchSweepData = computed(() => {
             :draft-len="draftLen"
             :cpu-offload="cpuOffload"
             :pure-cpu="pureCpu"
+            :gpu-memory-utilization="gpuMemoryUtilization"
             :ngl-count="nglCount"
           />
         </div>

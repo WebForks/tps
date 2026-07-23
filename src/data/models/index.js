@@ -26,7 +26,6 @@ import internvl2_8b from './internvl2_8b/index.js'
 import internvl2_26b from './internvl2_26b/index.js'
 import falcon3_10b from './falcon3_10b/index.js'
 import yi_1_5_34b from './yi_1_5_34b/index.js'
-import llama3_2_vision_11b_instruct from './llama3_2_vision_11b/index.js'
 import exaone_deep_7_8b from './exaone_deep_7_8b/index.js'
 import exaone_deep_32b from './exaone_deep_32b/index.js'
 import glm5_1 from './glm5_1/index.js'
@@ -233,7 +232,6 @@ import qwen25_1_5b from './qwen25_1_5b/index.js'
 import qwen25_0_5b from './qwen25_0_5b/index.js'
 import qwen25_14b from './qwen25_14b/index.js'
 import qwen2_7b from './qwen2_7b/index.js'
-import gemma_1_7b from './gemma_1_7b/index.js'
 import gemma_1_2b from './gemma_1_2b/index.js'
 import gemma_7b from './gemma_7b/index.js'
 import gemma2_7b from './gemma2_7b/index.js'
@@ -249,7 +247,6 @@ import gemma2_27b from './gemma2_27b/index.js'
 import gemma2_9b from './gemma2_9b/index.js'
 import deepseek_v2 from './deepseek_v2/index.js'
 import mixtral_8x22b from './mixtral_8x22b/index.js'
-import mistral_small_24b from './mistral_small_24b/index.js'
 import phi4_mini from './phi4_mini/index.js'
 import phi4_14b from './phi4_14b/index.js'
 import deepseek_r1_distill_llama_70b from './deepseek_r1_distill_llama_70b/index.js'
@@ -286,8 +283,6 @@ import llama_guard_7b from './llama_guard_7b/index.js'
 import llama_guard_3_8b from './llama_guard_3_8b/index.js'
 import llama_guard_3_11b_vision from './llama_guard_3_11b_vision/index.js'
 import llama3_1_nemotron_70b from './llama3_1_nemotron_70b/index.js'
-import llama3_2_vision_11b from './llama3_2_vision_11b/index.js'
-import llama3_2_vision_90b from './llama3_2_vision_90b/index.js'
 import tinyllama_1b from './tinyllama_1b/index.js'
 import mpt_7b from './mpt_7b/index.js'
 import solar_10_7b from './solar_10_7b/index.js'
@@ -401,6 +396,9 @@ export const DENSE_MODELS = [
   voxtral_small_24b,
   devstral_small_2_24b,
   devstral_2_123b,
+  minimax_music_01,
+  deepseek_janus_7b,
+  deepseek_janus_1_3b,
   qwen25_vl_3b,
   qwen25_vl_7b,
   qwen25_vl_72b,
@@ -419,7 +417,6 @@ export const DENSE_MODELS = [
   gemma3_4b,
   gemma3_1b,
   gemma3n,
-  mistral_small_24b,
   deepseek_r1_distill_llama_70b,
   deepseek_r1_distill_qwen_32b,
   deepseek_r1_distill_qwen_14b,
@@ -427,6 +424,11 @@ export const DENSE_MODELS = [
   deepseek_r1_distill_qwen_7b,
   // 2024
   pixtral_large_124b,
+  minimax_video_01,
+  llama3_1_nemotron_70b,
+  llama_guard_3_11b_vision,
+  llama_guard_3_8b,
+  yuan2_51b,
   llama_pro_8b,
   glm4_9b_chat,
   glm4_7b,
@@ -554,17 +556,11 @@ export const DENSE_MODELS = [
   falcon3_7b,
   qwen25_1_5b,
   qwen25_0_5b,
-  qwen2_1_5b,
-  qwen2_0_5b,
   qwen_1_8b,
   gemma2_27b,
   gemma2_9b,
-  gemma2_7b,
   gemma2_2b,
-  gemma_7b,
-  gemma_1_7b,
   gemma_1_2b,
-  paligemma_3b,
   llama3_8b,
   openhermes_llama3_8b,
   nous_hermes2_llama3_8b,
@@ -672,7 +668,6 @@ export const DENSE_MODELS = [
   llama2_7b,
   llama2_13b,
   yi_6b,
-  gemma_1_2b,
   yi_34b,
   bloom_176b,
   falcon_180b,
@@ -715,7 +710,6 @@ export const MOE_MODELS = [
   glm4_5,
   glm4_5_air,
   minimax_m1,
-  minimax_music_01,
   llama4_maverick,
   llama4_scout,
   qwen3_235b,
@@ -725,22 +719,14 @@ export const MOE_MODELS = [
   deepseek_r1_0528,
   deepseek_r1,
   deepseek_v3_1,
-  deepseek_janus_7b,
-  deepseek_janus_1_3b,
   minimax_text_01,
   // 2024
-  minimax_video_01,
   minimax_abab6_5,
   minimax_abab6,
   kimi_k1_5,
   kimi_k1,
   jamba_1_5_large,
   jamba_1_5_mini,
-  llama3_1_nemotron_70b,
-  llama3_2_vision_90b,
-  llama3_2_vision_11b,
-  llama_guard_3_11b_vision,
-  llama_guard_3_8b,
   // 2024
   dbrx,
   grok_1,
@@ -763,7 +749,6 @@ export const MOE_MODELS = [
   openmoe_34b,
   nous_hermes2_mixtral,
   dolphin_mixtral,
-  yuan2_51b,
   // 2023
   openmoe_8b,
   mixtral_8x7b,
@@ -810,8 +795,21 @@ export const COMMUNITY_MODELS = [
 // Models released before this date are considered legacy
 const LEGACY_CUTOFF = '2023-07'
 
+export const MODEL_ID_ALIASES = Object.freeze({
+  gemma_1_7b: 'gemma_7b',
+  mistral_small_24b: 'mistral_small_3_1_24b',
+  llama3_2_vision_11b: 'llama3_2_11b',
+  llama3_2_vision_90b: 'llama3_2_90b',
+})
+
+export function resolveModelId(id) {
+  return MODEL_ID_ALIASES[id] ?? id
+}
+
+const SOURCE_MODELS = [...DENSE_MODELS, ...MOE_MODELS, ...COMMUNITY_MODELS]
+
 export const ALL_MODELS = [...new Map(
-  [...DENSE_MODELS, ...MOE_MODELS, ...COMMUNITY_MODELS].map(m => [m.id, m])
+  SOURCE_MODELS.map(m => [m.id, m])
 ).values()].map(m => ({
   ...m,
   status: m.status ?? (m.released < LEGACY_CUTOFF ? 'legacy' : 'active')

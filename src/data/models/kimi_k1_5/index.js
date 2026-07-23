@@ -17,6 +17,9 @@ export default {
   hidden_size: 7168,
   max_ctx: 131072,
   tags: ['chat', 'multilingual'],
+  localInference: false,
+  availability: 'api-only',
+  parameterEstimate: true,
   links: {
     hf: 'https://huggingface.co/Moonshot',
   },

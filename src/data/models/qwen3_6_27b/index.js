@@ -7,15 +7,19 @@ export default {
   type: 'dense',
   params: 27,
   layers: 64,
+  query_heads: 24,
   kv_heads: 4,           // full attention KV heads
   head_dim: 256,
-  local_layers: 48,      // linear attention layers (no standard KV cache)
-  sliding_window: 0,     // 约定：window=0 表示这些层不产生 KV cache（GatedDeltaNet 线性 attention）
-                         // calc.js 中 Math.min(ctx, 0) = 0，使这 48 层的 KV 贡献归零
-                         // 这是一个有意为之的 hack，请勿改为 null（null 会走普通 KV 计算路径）
+  linear_attention_layers: 48,
+  linear_num_key_heads: 16,
+  linear_num_value_heads: 48,
+  linear_key_head_dim: 128,
+  linear_value_head_dim: 128,
+  linear_conv_kernel_dim: 4,
+  linear_state_bytes: 4, // mamba_ssm_dtype=float32
   hidden_size: 5120,
   max_ctx: 262144,
-  tags: ['chat', 'multilingual'],
+  tags: ['chat', 'multilingual', 'vision', 'multimodal'],
   released: '2026-04',
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen3.6-27B',

@@ -8,6 +8,7 @@ export default {
   params: 8.5,
   layers: 28,
   kv_heads: 16,
+  query_heads: 16,
   head_dim: 256,
   hidden_size: 3072,
   max_ctx: 8192,

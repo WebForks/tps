@@ -16,8 +16,15 @@ export default {
   params: 12,
   layers: 48,
   kv_heads: 8,
+  query_heads: 16,
   head_dim: 256,           // sliding attention head_dim
+  sliding_window: 1024,
+  local_layers: 40,
+  global_layers: 8,
+  global_head_dim: 512,
+  global_kv_heads: 1,
   hidden_size: 3840,
+  vision_seq_tokens: 280,
   max_ctx: 262144,         // 256K
   tags: ['multimodal', 'encoder-free', 'sliding+global'],
   links: {

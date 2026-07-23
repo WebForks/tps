@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ALL_MODELS } from '../../data/models/index.js'
 import { fmtParams, fmtCtx } from '../../utils/format.js'
@@ -31,6 +31,8 @@ const customModel = ref({
   type: 'dense',
   params: 7,
   active_params: 7,
+  experts: 8,
+  experts_per_token: 2,
   mla_ratio: null,
   layers: 32,
   kv_heads: 8,
@@ -40,6 +42,33 @@ const customModel = ref({
   links: { ollama: null, hf: null, ms: null },
 })
 const customIsMoe = ref(false)
+const customIntegerFields = new Set(['layers', 'kv_heads', 'head_dim', 'hidden_size', 'max_ctx'])
+
+const customModelValid = computed(() => {
+  const candidate = customModel.value
+  if (!Number.isFinite(Number(candidate.params)) || Number(candidate.params) <= 0) return false
+  for (const field of customIntegerFields) {
+    const value = Number(candidate[field])
+    if (!Number.isInteger(value) || value <= 0) return false
+  }
+  if (customIsMoe.value) {
+    const active = Number(candidate.active_params)
+    if (!Number.isFinite(active) || active <= 0 || active > Number(candidate.params)) return false
+    const experts = Number(candidate.experts)
+    const expertsPerToken = Number(candidate.experts_per_token)
+    if (
+      !Number.isInteger(experts)
+      || !Number.isInteger(expertsPerToken)
+      || expertsPerToken < 1
+      || experts < expertsPerToken
+    ) return false
+    if (candidate.mla_ratio !== '' && candidate.mla_ratio != null) {
+      const ratio = Number(candidate.mla_ratio)
+      if (!Number.isFinite(ratio) || ratio <= 0 || ratio > 1) return false
+    }
+  }
+  return true
+})
 
 const filteredModels = computed(() => {
   let list = ALL_MODELS
@@ -79,11 +108,14 @@ function selectModel(m) {
 }
 
 function applyCustom() {
+  if (!customModelValid.value) return
   const m = { ...customModel.value }
   m.type = customIsMoe.value ? 'moe' : 'dense'
   if (!customIsMoe.value) {
     m.active_params = m.params
     m.mla_ratio = null
+    delete m.experts
+    delete m.experts_per_token
   }
   model.value = { ...m }
 }
@@ -109,7 +141,19 @@ function fmtRelease(val) {
 const TABS = ['all', 'dense', 'moe', 'custom']
 
 onMounted(() => {
-  if (model.value) scrollToSelected(model.value.id, 'instant')
+  if (model.value?.id === 'custom') {
+    customModel.value = { ...customModel.value, ...model.value, links: { ...customModel.value.links, ...model.value.links } }
+    customIsMoe.value = model.value.type === 'moe'
+    activeTab.value = 'custom'
+  } else if (model.value) {
+    scrollToSelected(model.value.id, 'instant')
+  }
+})
+
+watch(model, selected => {
+  if (selected?.id !== 'custom') return
+  customModel.value = { ...customModel.value, ...selected, links: { ...customModel.value.links, ...selected.links } }
+  customIsMoe.value = selected.type === 'moe'
 })
 
 function switchTab(tab) {
@@ -136,7 +180,7 @@ function switchTab(tab) {
         v-if="model && activeTab !== 'custom'"
         @click="scrollToSelected(model.id)"
         class="shrink-0 px-2.5 py-2 bg-gray-100 hover:bg-emerald-50 border border-gray-300 hover:border-emerald-400 rounded-lg text-gray-500 hover:text-emerald-600 transition-colors"
-        title="回到已选模型"
+        :title="t('model.return_selected')"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
@@ -178,21 +222,41 @@ function switchTab(tab) {
             <input
               v-model.number="customModel[field]"
               type="number"
+              :min="field === 'params' ? 0.0001 : 1"
+              :step="field === 'params' ? 0.01 : 1"
               class="w-full bg-gray-50 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
           <template v-if="customIsMoe">
             <div>
               <label class="block text-xs text-gray-500 mb-0.5">{{ t('model.custom.active_params') }}</label>
-              <input v-model.number="customModel.active_params" type="number" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+              <input v-model.number="customModel.active_params" type="number" min="0.0001" :max="customModel.params" step="0.01" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-0.5">{{ t('model.custom.experts') }}</label>
+              <input v-model.number="customModel.experts" type="number" min="1" max="10000" step="1" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-0.5">{{ t('model.custom.experts_per_token') }}</label>
+              <input v-model.number="customModel.experts_per_token" type="number" min="1" :max="customModel.experts" step="1" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
             </div>
             <div>
               <label class="block text-xs text-gray-500 mb-0.5">{{ t('model.custom.mla_ratio') }}</label>
-              <input v-model.number="customModel.mla_ratio" type="number" step="0.01" placeholder="0.18 or empty" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+              <input v-model.number="customModel.mla_ratio" type="number" min="0.0001" max="1" step="0.01" placeholder="0.18 or empty" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500" />
             </div>
           </template>
         </div>
-        <button @click="applyCustom" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition-colors">
+        <p v-if="!customModelValid" class="text-xs text-rose-600">{{ t('model.custom_invalid') }}</p>
+        <button
+          @click="applyCustom"
+          :disabled="!customModelValid"
+          :class="[
+            'w-full py-2 rounded-lg text-sm font-medium transition-colors',
+            customModelValid
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed',
+          ]"
+        >
           {{ t('model.apply_custom') }}
         </button>
       </div>
@@ -227,6 +291,11 @@ function switchTab(tab) {
                 <div class="flex items-center gap-2 flex-1 min-w-0">
                   <span v-if="m.type === 'moe'" class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold shrink-0">MoE</span>
                   <span v-else class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md font-semibold shrink-0">Dense</span>
+                  <span
+                    v-if="m.localInference === false"
+                    class="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-md font-semibold shrink-0"
+                    :title="t('model.local_command_unavailable')"
+                  >{{ t('model.api_only_badge') }}</span>
                   <button
                     @click.stop="openDetails(m)"
                     class="text-base font-semibold text-gray-900 hover:text-blue-700 transition-colors truncate"
@@ -236,7 +305,7 @@ function switchTab(tab) {
                   </button>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                  <span class="text-sm font-normal text-gray-400">{{ fmtParams(m.params) }}</span>
+                  <span class="text-sm font-normal text-gray-400">{{ m.parameterEstimate ? '≈' : '' }}{{ fmtParams(m.params) }}</span>
                   <span class="text-sm font-normal text-gray-400">{{ fmtCtx(m.max_ctx) }}</span>
                   <span v-if="isNew(m.released)" class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
                 </div>
@@ -253,7 +322,7 @@ function switchTab(tab) {
                   v-if="m.links?.ollama"
                   @click="copyOllama(m.links.ollama)"
                   class="flex-1 text-xs px-3 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors font-normal border border-gray-200"
-                  title="点击复制命令"
+                  :title="t('model.copy_command')"
                 >Ollama</button>
                 <a
                   v-if="m.links?.hf"
@@ -310,10 +379,16 @@ function switchTab(tab) {
         </div>
 
         <div class="p-5">
+          <div
+            v-if="detailModel.localInference === false || detailModel.parameterEstimate"
+            class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800"
+          >
+            {{ detailModel.localInference === false ? t('model.local_command_unavailable') : t('model.estimated_specs_warning') }}
+          </div>
           <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
             <div class="rounded-xl bg-white/85 px-3 py-2 ring-1 ring-emerald-100">
               <div class="text-gray-500">{{ t('model.detail.params') }}</div>
-              <div class="mt-1 font-semibold text-gray-900">{{ fmtParams(detailModel.params) }}</div>
+              <div class="mt-1 font-semibold text-gray-900">{{ detailModel.parameterEstimate ? '≈' : '' }}{{ fmtParams(detailModel.params) }}</div>
             </div>
             <div class="rounded-xl bg-white/85 px-3 py-2 ring-1 ring-emerald-100">
               <div class="text-gray-500">{{ t('model.detail.active_params') }}</div>

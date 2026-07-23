@@ -5,8 +5,10 @@ import { GPU_LIST } from '../../data/gpus/index.js'
 import { INTERCONNECT_MAP } from '../../data/constants.js'
 import { isNew } from '../../utils/format.js'
 import { detectLocalGpu } from '../../utils/detectGpu.js'
+import { usesFp16ForCombinedPrecision } from '../../utils/runtime.js'
 
 const { t } = useI18n()
+const SELECTABLE_GPU_LIST = GPU_LIST.filter(gpu => gpu.unitKind !== 'cpu')
 
 // ── Props / emits（gpuSlots 模式）──────────────────
 const gpuSlots    = defineModel('gpuSlots',    { required: true })
@@ -16,8 +18,23 @@ const sharedVram   = defineModel('sharedVram',   { default: 16 })
 // 主卡（第一个 slot 的 gpu），用于规格展示和 iGPU 判断
 const primaryGpu = computed(() => gpuSlots.value[0]?.gpu ?? null)
 const totalCount = computed(() => gpuSlots.value.reduce((s, g) => s + g.count, 0))
-const isMixed    = computed(() => gpuSlots.value.length > 1)
+const isMixed    = computed(() => new Set(gpuSlots.value.map(slot => slot.gpu?.id).filter(Boolean)).size > 1)
 const isSharedMemory = computed(() => primaryGpu.value?.sharedMemory && primaryGpu.value?.vram === 0)
+
+function isSingleDeviceGpu(gpu) {
+  return Boolean(
+    gpu?.sharedMemory
+    || gpu?.unifiedMemory
+    || gpu?.vendor === 'apple'
+    || gpu?.unitKind === 'cpu'
+  )
+}
+
+function isMixableGpu(gpu) {
+  return Boolean(gpu)
+    && !isSingleDeviceGpu(gpu)
+    && gpu.unitKind !== 'system'
+}
 
 // 多卡模式下每个 slot 的数量选项
 const SLOT_COUNT_OPTIONS = [1, 2, 4, 8]
@@ -27,13 +44,63 @@ const SINGLE_COUNT_OPTIONS = [1, 2, 4, 8, 16]
 const customCountInput = ref('')
 
 const isApple = computed(() => primaryGpu.value?.vendor === 'apple')
+const isAggregateSystem = computed(() => primaryGpu.value?.unitKind === 'system')
+const singleDeviceOnly = computed(() => isSingleDeviceGpu(primaryGpu.value))
+const blocksMixedSlots = computed(() => singleDeviceOnly.value || isAggregateSystem.value)
+
+function pcieOptionsFor(gpus) {
+  const generations = gpus
+    .map(gpu => Number(gpu?.pcie_gen))
+    .filter(Number.isFinite)
+  const generation = generations.length ? Math.min(...generations) : 4
+  const maximum = generation <= 3 ? 3 : generation >= 5 ? 5 : 4
+  return [5, 4, 3]
+    .filter(candidate => candidate <= maximum)
+    .map(candidate => INTERCONNECT_MAP.find(option => option.id === `pcie${candidate}`))
+    .filter(Boolean)
+}
+
+function nvlinkOptionFor(gpu) {
+  const duplexBw = Number(gpu?.nvlink_bw)
+  if (!Number.isFinite(duplexBw) || duplexBw <= 0) return null
+  return INTERCONNECT_MAP.find(option => (
+    option.id.startsWith('nvlink')
+    && Number(option.duplexBw ?? option.bw * 2) === duplexBw
+  )) ?? {
+    id: `nvlink_${duplexBw}`,
+    label: `NVLink (${duplexBw} GB/s ${t('gpu.duplex')})`,
+    bw: duplexBw / 2,
+    duplexBw,
+    scope: 'intra',
+    derived: true,
+  }
+}
+
+const allowedInterconnects = computed(() => {
+  const selectedGpus = gpuSlots.value.map(slot => slot.gpu).filter(Boolean)
+  if (isAggregateSystem.value) {
+    return totalCount.value > 1
+      ? INTERCONNECT_MAP.filter(option => option.scope === 'inter')
+      : []
+  }
+  const pcie = pcieOptionsFor(selectedGpus)
+  if (isMixed.value || totalCount.value <= 1) return pcie
+  const nvlink = nvlinkOptionFor(primaryGpu.value)
+  return nvlink ? [nvlink, ...pcie] : pcie
+})
+const topologyKey = computed(() => gpuSlots.value
+  .map(slot => `${slot.gpu?.id ?? ''}:${slot.gpu?.pcie_gen ?? ''}:${slot.count}`)
+  .join(','))
 
 // 单卡模式下的数量（第一个 slot 的 count）
 const singleCount = computed(() => gpuSlots.value[0]?.count ?? 1)
 const isCustomCount = computed(() => !SINGLE_COUNT_OPTIONS.includes(singleCount.value))
 
 function setSingleCount(n) {
-  gpuSlots.value = [{ ...gpuSlots.value[0], count: n }]
+  gpuSlots.value = [{
+    ...gpuSlots.value[0],
+    count: singleDeviceOnly.value ? 1 : n,
+  }]
 }
 
 function applyCustomCount() {
@@ -46,6 +113,7 @@ function applyCustomCount() {
 const multiMode = ref(gpuSlots.value.length > 1)
 
 function setMode(multi) {
+  if (multi && blocksMixedSlots.value) return
   multiMode.value = multi
   if (!multi) {
     // 切回单卡：只保留第一个 slot
@@ -55,18 +123,43 @@ function setMode(multi) {
 }
 
 // 外部（URL 恢复）带多个 slot 进来时，自动进入多卡模式
-watch(() => gpuSlots.value.length, (len) => {
-  if (len > 1) multiMode.value = true
-})
+watch(() => gpuSlots.value, (slots) => {
+  if (!Array.isArray(slots) || slots.length === 0) return
+  const primary = slots[0]
+
+  // Sanitize external/URL-restored state as well as interactive changes.
+  // Unified/shared-memory hardware is one complete device: it cannot be
+  // multiplied or combined with another slot.
+  if (isSingleDeviceGpu(primary?.gpu)) {
+    multiMode.value = false
+    if (slots.length !== 1 || primary.count !== 1) {
+      gpuSlots.value = [{ ...primary, count: 1 }]
+    }
+    return
+  }
+
+  // Preserve the primary discrete device and discard any invalid
+  // unified/shared-memory secondary restored from a URL.
+  const sanitized = [
+    primary,
+    ...slots.slice(1).filter(slot => isMixableGpu(slot?.gpu)),
+  ]
+  if (sanitized.length !== slots.length) {
+    gpuSlots.value = sanitized
+  }
+  multiMode.value = sanitized.length > 1
+}, { deep: true, immediate: true })
 
 // ── Slot 增删 ───────────────────────────────────────
 function addSlot() {
+  if (blocksMixedSlots.value) return
   const vendor = primaryGpu.value?.vendor ?? null
   // 默认选同 vendor 中第一张尚未被选中的 GPU
   const usedIds = new Set(gpuSlots.value.map(s => s.gpu?.id))
-  const defaultGpu = GPU_LIST.find(g => g.vendor === vendor && !usedIds.has(g.id))
-    ?? GPU_LIST.find(g => g.vendor === vendor)
-    ?? GPU_LIST[0]
+  const defaultGpu = SELECTABLE_GPU_LIST.find(g => g.vendor === vendor && isMixableGpu(g) && !usedIds.has(g.id))
+    ?? SELECTABLE_GPU_LIST.find(g => g.vendor === vendor && isMixableGpu(g))
+    ?? SELECTABLE_GPU_LIST.find(isMixableGpu)
+  if (!defaultGpu) return
   gpuSlots.value = [...gpuSlots.value, { gpu: defaultGpu, count: 1 }]
 }
 
@@ -76,6 +169,7 @@ function removeSlot(idx) {
 }
 
 function updateSlotCount(idx, n) {
+  if (isSingleDeviceGpu(gpuSlots.value[idx]?.gpu)) n = 1
   const slots = gpuSlots.value.map((s, i) => i === idx ? { ...s, count: n } : s)
   gpuSlots.value = slots
 }
@@ -87,12 +181,27 @@ const containerRef = ref(null)
 
 const filteredGpus = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return GPU_LIST
-  return GPU_LIST.filter(g => g.name.toLowerCase().includes(q))
+  if (!q) return SELECTABLE_GPU_LIST
+  return SELECTABLE_GPU_LIST.filter(g => g.name.toLowerCase().includes(q))
 })
 
 // 按 vendor 分组
-const vendorLabel = { nvidia: 'NVIDIA', amd: 'AMD', intel: 'Intel', apple: 'Apple Silicon', domestic: '国产' }
+const vendorLabel = { nvidia: 'NVIDIA', amd: 'AMD', intel: 'Intel', apple: 'Apple Silicon' }
+function getVendorLabel(vendor) {
+  return vendor === 'domestic'
+    ? t('gpu.vendor_domestic')
+    : (vendorLabel[vendor] ?? vendor)
+}
+
+function updateSharedVram(event) {
+  const current = Number(sharedVram.value)
+  const parsed = Number(event.target.value)
+  const next = Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : (Number.isFinite(current) && current > 0 ? current : 16)
+  sharedVram.value = Math.round(Math.max(1, Math.min(512, next)))
+  event.target.value = sharedVram.value
+}
 
 // 多卡模式下，非第一个 slot 的下拉只允许选主卡同 vendor 的 GPU
 // allowedVendor: null 表示不限制（第一个 slot 或单卡模式）
@@ -105,7 +214,9 @@ function getAllowedVendor(idx) {
 function getFilteredGroups(idx) {
   const allowed = getAllowedVendor(idx)
   const q = searchQuery.value.trim().toLowerCase()
-  const list = q ? GPU_LIST.filter(g => g.name.toLowerCase().includes(q)) : GPU_LIST
+  const list = q
+    ? SELECTABLE_GPU_LIST.filter(g => g.name.toLowerCase().includes(q))
+    : SELECTABLE_GPU_LIST
   const map = {}
   for (const g of list) {
     if (!map[g.vendor]) map[g.vendor] = []
@@ -116,6 +227,15 @@ function getFilteredGroups(idx) {
     gpus,
     disabled: allowed !== null && vendor !== allowed,
   }))
+}
+
+function isGpuDisabledForSlot(idx, gpu, groupDisabled = false) {
+  return groupDisabled
+    || (
+      multiMode.value
+      && idx !== 0
+      && !isMixableGpu(gpu)
+    )
 }
 
 // 兼容旧的 filteredGroups（单卡模式 / 第一个 slot 用）
@@ -129,6 +249,7 @@ function openDropdown(idx) {
 function selectGpu(idx, g) {
   // 多卡模式下非第一个 slot 禁止选跨 vendor 的 GPU
   if (multiMode.value && idx !== 0 && g.vendor !== primaryGpu.value?.vendor) return
+  if (multiMode.value && idx !== 0 && !isMixableGpu(g)) return
   const slots = gpuSlots.value.map((s, i) => i === idx ? { ...s, gpu: g } : s)
   gpuSlots.value = slots
   openSlot.value = null
@@ -170,39 +291,35 @@ async function manualDetect() {
 }
 
 // ── 选 GPU 时自动匹配互联方式（主卡）──────────────────
-watch(primaryGpu, (g) => {
+watch([primaryGpu, totalCount, isMixed, blocksMixedSlots, topologyKey], ([g, count, mixed, indivisible]) => {
   if (!g) return
-  if (g.vendor === 'apple') {
+  const allowed = allowedInterconnects.value
+  if (indivisible) {
     // Apple Silicon 只支持单卡，强制回单卡模式
     multiMode.value = false
     if (gpuSlots.value.length > 1) gpuSlots.value = [gpuSlots.value[0]]
-    gpuSlots.value = [{ ...gpuSlots.value[0], count: 1 }]
-    return
+    if (singleDeviceOnly.value && gpuSlots.value[0]?.count !== 1) {
+      gpuSlots.value = [{ ...gpuSlots.value[0], count: 1 }]
+    }
   }
   // 多卡模式下，其他 slot 若是跨 vendor 则自动替换为同 vendor 的第一张
   if (multiMode.value && gpuSlots.value.length > 1) {
     gpuSlots.value = gpuSlots.value.map((s, i) => {
       if (i === 0) return s
       if (s.gpu?.vendor !== g.vendor) {
-        const fallback = GPU_LIST.find(gpu => gpu.vendor === g.vendor) ?? s.gpu
+        const fallback = SELECTABLE_GPU_LIST.find(gpu =>
+          gpu.vendor === g.vendor && isMixableGpu(gpu)
+        ) ?? s.gpu
         return { ...s, gpu: fallback }
       }
       return s
     })
   }
-  if (isMixed.value) return  // 混合卡不自动切换互联
-  if (!g.nvlink_bw) return
-  const matched = INTERCONNECT_MAP.find(ic => ic.bw === g.nvlink_bw)
-  if (matched) interconnect.value = matched
-})
-
-// 混合卡时自动切换到 PCIe
-watch(isMixed, (mixed) => {
-  if (mixed) {
-    const pcie = INTERCONNECT_MAP.find(ic => ic.id === 'pcie4')
-    if (pcie) interconnect.value = pcie
+  if (allowed.length && !allowed.some(option => option.id === interconnect.value?.id)) {
+    interconnect.value = allowed[0] ?? interconnect.value
   }
-})
+}, { immediate: true })
+
 </script>
 
 <template>
@@ -210,7 +327,7 @@ watch(isMixed, (mixed) => {
     <div class="flex items-center justify-between">
       <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wider">{{ t('gpu.title') }}</h2>
       <!-- 单卡 / 多卡切换（Apple Silicon 不支持多卡，隐藏）-->
-      <div v-if="!isApple" class="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
+      <div v-if="!blocksMixedSlots" class="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5">
         <button
           @click="setMode(false)"
           class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
@@ -272,6 +389,17 @@ watch(isMixed, (mixed) => {
             >
               <span class="flex items-center gap-1.5 truncate">
                 {{ slot.gpu?.name ?? t('gpu.select_placeholder') }}
+                <span
+                  v-if="slot.gpu?.unitKind === 'system'"
+                  class="shrink-0 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-700"
+                >{{ t('gpu.system_unit_summary', {
+                  systems: slot.count,
+                  physical: slot.count * (slot.gpu.physicalGpuCount ?? 1)
+                }) }}</span>
+                <span
+                  v-if="slot.gpu && (slot.gpu.modified || slot.gpu.official === false)"
+                  class="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-700"
+                >{{ t('gpu.modified_badge') }}</span>
                 <span v-if="slot.gpu && isNew(slot.gpu.released)" class="inline-block w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>
               </span>
               <svg class="w-4 h-4 text-gray-400 shrink-0 ml-2 transition-transform" :class="{ 'rotate-180': openSlot === idx }" viewBox="0 0 20 20" fill="currentColor">
@@ -329,17 +457,17 @@ watch(isMixed, (mixed) => {
                     class="px-3 py-1 text-xs font-semibold bg-gray-50 sticky top-0 flex items-center justify-between"
                     :class="group.disabled ? 'text-gray-300' : 'text-gray-400'"
                   >
-                    <span>{{ vendorLabel[group.vendor] ?? group.vendor }}</span>
+                    <span>{{ getVendorLabel(group.vendor) }}</span>
                     <span v-if="group.disabled" class="text-[10px] font-normal text-gray-300">{{ t('gpu.cross_vendor_disabled') }}</span>
                   </div>
                   <button
                     v-for="g in group.gpus"
                     :key="g.id"
                     type="button"
-                    :disabled="group.disabled"
+                    :disabled="isGpuDisabledForSlot(idx, g, group.disabled)"
                     @click="selectGpu(idx, g)"
                     class="w-full text-left px-3 py-2 transition-colors border-b border-gray-50 last:border-0"
-                    :class="group.disabled
+                    :class="isGpuDisabledForSlot(idx, g, group.disabled)
                       ? 'opacity-35 cursor-not-allowed bg-white'
                       : g.id === slot.gpu?.id
                         ? 'bg-emerald-50 text-emerald-700'
@@ -348,15 +476,19 @@ watch(isMixed, (mixed) => {
                     <div class="flex items-start justify-between gap-2">
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-1.5 mb-0.5">
-                          <span class="text-sm font-medium truncate" :class="g.id === slot.gpu?.id && !group.disabled ? 'text-emerald-700' : 'text-gray-900'">
+                          <span class="text-sm font-medium truncate" :class="g.id === slot.gpu?.id && !isGpuDisabledForSlot(idx, g, group.disabled) ? 'text-emerald-700' : 'text-gray-900'">
                             {{ g.name }}
                           </span>
-                          <span v-if="isNew(g.released) && !group.disabled" class="inline-block w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>
+                          <span
+                            v-if="g.modified || g.official === false"
+                            class="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-amber-700"
+                          >{{ t('gpu.modified_badge') }}</span>
+                          <span v-if="isNew(g.released) && !isGpuDisabledForSlot(idx, g, group.disabled)" class="inline-block w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>
                         </div>
-                        <div class="flex items-center gap-3 text-[11px]" :class="g.id === slot.gpu?.id && !group.disabled ? 'text-emerald-600' : 'text-gray-500'">
-                          <span>{{ g.sharedMemory ? '共享' : g.vram + 'GB' }}</span>
+                        <div class="flex items-center gap-3 text-[11px]" :class="g.id === slot.gpu?.id && !isGpuDisabledForSlot(idx, g, group.disabled) ? 'text-emerald-600' : 'text-gray-500'">
+                          <span>{{ g.sharedMemory ? t('gpu.shared_short') : g.vram + 'GB' }}</span>
                           <span>{{ g.bw }}GB/s</span>
-                          <span>{{ g.bf16 }}T</span>
+                          <span>{{ g.bf16 }}T<span v-if="usesFp16ForCombinedPrecision(g)"> {{ t('gpu.fp16_equivalent_short') }}</span></span>
                           <span>{{ g.tdp }}W</span>
                         </div>
                       </div>
@@ -373,8 +505,10 @@ watch(isMixed, (mixed) => {
       </div>
 
       <!-- 单卡模式：数量选择（Apple Silicon 不显示）-->
-      <div v-if="!multiMode && !isApple" class="mt-2">
-        <label class="block text-xs text-gray-500 mb-1.5">{{ t('gpu.count') }}</label>
+      <div v-if="!multiMode && !singleDeviceOnly" class="mt-2">
+        <label class="block text-xs text-gray-500 mb-1.5">
+          {{ isAggregateSystem ? t('gpu.system_count') : t('gpu.count') }}
+        </label>
         <div class="flex flex-wrap gap-1.5">
           <button
             v-for="n in SINGLE_COUNT_OPTIONS"
@@ -405,7 +539,7 @@ watch(isMixed, (mixed) => {
 
       <!-- 添加另一种 GPU -->
       <button
-        v-if="multiMode && gpuSlots.length < 4"
+        v-if="multiMode && !blocksMixedSlots && gpuSlots.length < 4"
         @click="addSlot"
         class="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-emerald-700 border border-dashed border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors"
       >
@@ -422,6 +556,14 @@ watch(isMixed, (mixed) => {
         </svg>
         <p class="text-xs text-amber-700 leading-relaxed">{{ t('gpu.multi_gpu_notice') }}</p>
       </div>
+
+      <div
+        v-if="gpuSlots.some(slot => slot.gpu?.modified || slot.gpu?.official === false)"
+        class="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"
+      >
+        <span class="shrink-0 text-xs text-amber-600">⚠</span>
+        <p class="text-xs leading-relaxed text-amber-700">{{ t('gpu.modified_notice') }}</p>
+      </div>
     </div>
 
     <!-- GPU 规格展示（主卡）-->
@@ -437,6 +579,9 @@ watch(isMixed, (mixed) => {
       <div class="bg-gray-50 rounded-lg p-2 text-center">
         <div class="text-xs text-gray-500">{{ t('gpu.bf16_label') }}</div>
         <div class="text-sm font-semibold text-emerald-700">{{ primaryGpu.bf16 }} <span class="text-xs">T</span></div>
+        <div v-if="usesFp16ForCombinedPrecision(primaryGpu)" class="text-[10px] leading-tight text-amber-600">
+          {{ t('gpu.fp16_equivalent') }}
+        </div>
       </div>
       <div class="bg-gray-50 rounded-lg p-2 text-center">
         <div class="text-xs text-gray-500">{{ t('gpu.tdp_label') }}</div>
@@ -444,12 +589,21 @@ watch(isMixed, (mixed) => {
       </div>
     </div>
 
+    <div
+      v-if="primaryGpu?.computeEstimate || primaryGpu?.tdpEstimate"
+      class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"
+    >
+      <span class="shrink-0 text-xs text-amber-600">⚠</span>
+      <p class="text-xs leading-relaxed text-amber-700">{{ t('gpu.estimated_specs_warning') }}</p>
+    </div>
+
     <!-- 共享内存输入（iGPU 时显示）-->
     <div v-if="isSharedMemory" class="flex items-center gap-3 px-1">
       <label class="text-xs text-gray-500 whitespace-nowrap">{{ t('gpu.shared_vram_label') }}</label>
       <input
         :value="sharedVram"
-        @input="sharedVram = Math.max(1, Math.min(512, Number($event.target.value) || 16))"
+        @change="updateSharedVram"
+        @blur="updateSharedVram"
         type="number" min="1" max="512" step="1"
         class="w-24 py-1 px-2 rounded-lg text-sm border border-amber-300 bg-amber-50 text-gray-800 focus:outline-none focus:ring-1 focus:ring-amber-500 text-center"
       />
@@ -461,12 +615,11 @@ watch(isMixed, (mixed) => {
       <label class="block text-xs text-gray-500 mb-1">{{ t('gpu.interconnect') }}</label>
       <select
         :value="interconnect.id"
-        @change="interconnect = INTERCONNECT_MAP.find(i => i.id === $event.target.value)"
-        :disabled="isMixed"
-        class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
+        @change="interconnect = allowedInterconnects.find(i => i.id === $event.target.value)"
+        class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
       >
-        <option v-for="ic in INTERCONNECT_MAP" :key="ic.id" :value="ic.id">
-          {{ ic.label }} ({{ ic.bw }} GB/s)
+        <option v-for="ic in allowedInterconnects" :key="ic.id" :value="ic.id">
+          {{ ic.label }} ({{ ic.bw }} GB/s {{ t('gpu.one_way') }})
         </option>
       </select>
       <p v-if="isMixed" class="mt-1 text-xs text-amber-600">

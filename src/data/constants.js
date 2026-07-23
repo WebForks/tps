@@ -10,32 +10,39 @@
 export const QUANT_MAP = [
   { id: 'fp32',  label: 'FP32',          bytes: 4.00, gguf_bytes: 4.00, kv_bytes: 4.0, flops_key: 'bf16', prefill_flops_key: 'bf16', quality: 'best',  ppl_loss: 0.00 },
   { id: 'bf16',  label: 'BF16/FP16',     bytes: 2.00, gguf_bytes: 2.00, kv_bytes: 2.0, flops_key: 'bf16', prefill_flops_key: 'bf16', quality: 'great', ppl_loss: 0.00 },
-  { id: 'fp8',   label: 'FP8',           bytes: 1.00, gguf_bytes: 1.00, kv_bytes: 1.0, flops_key: 'fp8',  prefill_flops_key: 'fp8',  quality: 'great', ppl_loss: 0.10 },
+  // FP8 weights do not imply FP8 KV cache; frameworks require that as a
+  // separate opt-in, represented by KV_CACHE_MAP.
+  { id: 'fp8',   label: 'FP8',           bytes: 1.00, gguf_bytes: 1.00, kv_bytes: 2.0, flops_key: 'fp8',  prefill_flops_key: 'fp8',  quality: 'great', ppl_loss: 0.10 },
   { id: 'int8',  label: 'INT8/Q8',       bytes: 1.00, gguf_bytes: 1.05, kv_bytes: 2.0, flops_key: 'int8', prefill_flops_key: 'int8', quality: 'good',  ppl_loss: 0.10 },
-  { id: 'int6',  label: 'Q6_K',          bytes: 0.75, gguf_bytes: 0.80, kv_bytes: 2.0, flops_key: 'bf16', prefill_flops_key: 'bf16', quality: 'good',  ppl_loss: 0.20 },
-  { id: 'int5',  label: 'Q5_K',          bytes: 0.625,gguf_bytes: 0.69, kv_bytes: 2.0, flops_key: 'bf16', prefill_flops_key: 'bf16', quality: 'ok',    ppl_loss: 0.40 },
-  { id: 'int4',  label: 'INT4/GPTQ/AWQ', bytes: 0.50, gguf_bytes: 0.615,kv_bytes: 2.0, flops_key: 'int4', prefill_flops_key: 'bf16', quality: 'ok',    ppl_loss: 0.80 },
-  { id: 'int3',  label: 'Q3_K',          bytes: 0.375,gguf_bytes: 0.42, kv_bytes: 2.0, flops_key: 'int4', prefill_flops_key: 'bf16', quality: 'poor',  ppl_loss: 2.00 },
-  { id: 'int2',  label: 'INT2/NF2',      bytes: 0.25, gguf_bytes: 0.28, kv_bytes: 2.0, flops_key: 'int4', prefill_flops_key: 'bf16', quality: 'bad',   ppl_loss: 8.00 },
+  // Non-GGUF sizes include typical group scales/zero-points rather than using
+  // the impossible packed-bit lower bound alone.
+  { id: 'int6',  label: 'Q6_K',          bytes: 0.80, gguf_bytes: 0.80, kv_bytes: 2.0, flops_key: 'bf16', prefill_flops_key: 'bf16', quality: 'good',  ppl_loss: 0.20 },
+  { id: 'int5',  label: 'Q5_K',          bytes: 0.66, gguf_bytes: 0.69, kv_bytes: 2.0, flops_key: 'bf16', prefill_flops_key: 'bf16', quality: 'ok',    ppl_loss: 0.40 },
+  { id: 'int4',  label: 'INT4/GPTQ/AWQ', bytes: 0.55, gguf_bytes: 0.615,kv_bytes: 2.0, flops_key: 'int4', prefill_flops_key: 'bf16', quality: 'ok',    ppl_loss: 0.80 },
+  { id: 'int3',  label: 'Q3_K',          bytes: 0.42, gguf_bytes: 0.42, kv_bytes: 2.0, flops_key: 'int4', prefill_flops_key: 'bf16', quality: 'poor',  ppl_loss: 2.00 },
+  { id: 'int2',  label: 'INT2/NF2',      bytes: 0.30, gguf_bytes: 0.28, kv_bytes: 2.0, flops_key: 'int4', prefill_flops_key: 'bf16', quality: 'bad',   ppl_loss: 8.00 },
 ]
 
+// `bw` is aggregate one-way bandwidth because transfer-time formulas move a
+// payload in one direction. `duplexBw` is retained for spec display/matching.
 export const INTERCONNECT_MAP = [
-  { id: 'nvlink5',  label: 'NVLink 5.0',    bw: 1800, scope: 'intra' },
-  { id: 'nvlink4',  label: 'NVLink 4.0',    bw: 900,  scope: 'intra' },
-  { id: 'nvlink3',  label: 'NVLink 3.0',    bw: 600,  scope: 'intra' },
-  { id: 'nvswitch', label: 'NVSwitch',       bw: 900,  scope: 'intra' },
+  { id: 'nvlink5',  label: 'NVLink 5.0',    bw: 900, scope: 'intra', duplexBw: 1800 },
+  { id: 'nvlink4',  label: 'NVLink 4.0',    bw: 450, scope: 'intra', duplexBw: 900 },
+  { id: 'nvlink3',  label: 'NVLink 3.0',    bw: 300, scope: 'intra', duplexBw: 600 },
+  { id: 'nvswitch', label: 'NVSwitch',       bw: 450, scope: 'intra', duplexBw: 900 },
   // 跨节点互联（all-reduce 延迟比节点内高 1-2 个数量级）
-  { id: 'ib_ndr',   label: 'InfiniBand NDR (inter-node)', bw: 100, scope: 'inter' },
-  { id: 'ib_hdr',   label: 'InfiniBand HDR (inter-node)', bw: 50,  scope: 'inter' },
+  { id: 'ib_ndr',   label: 'InfiniBand NDR (inter-node)', bw: 50, scope: 'inter', duplexBw: 100 },
+  { id: 'ib_hdr',   label: 'InfiniBand HDR (inter-node)', bw: 25, scope: 'inter', duplexBw: 50 },
   // PCIe（节点内，无 NVLink 时）
-  { id: 'pcie5',    label: 'PCIe 5.0',       bw: 128,  scope: 'intra' },
-  { id: 'pcie4',    label: 'PCIe 4.0',       bw: 64,   scope: 'intra' },
+  { id: 'pcie5',    label: 'PCIe 5.0',       bw: 64, scope: 'intra', duplexBw: 128 },
+  { id: 'pcie4',    label: 'PCIe 4.0',       bw: 32, scope: 'intra', duplexBw: 64 },
+  { id: 'pcie3',    label: 'PCIe 3.0',       bw: 16, scope: 'intra', duplexBw: 32 },
 ]
 
 export const FRAMEWORK_MAP = [
   // vendors: null = 全平台通用
   { id: 'theory',        labelKey: 'framework.theory',        decode: 1.00, prefill: 1.00, decodeMin: 1.00, decodeMax: 1.00, prefillMin: 1.00, prefillMax: 1.00, vendors: null,                    schedulingMode: 'serial'     },
-  { id: 'trtllm',        labelKey: 'framework.trtllm',        decode: 0.80, prefill: 0.75, decodeMin: 0.75, decodeMax: 0.85, prefillMin: 0.80, prefillMax: 0.90, vendors: ['nvidia'],             schedulingMode: 'continuous' },
+  { id: 'trtllm',        labelKey: 'framework.trtllm',        decode: 0.80, prefill: 0.75, decodeMin: 0.75, decodeMax: 0.85, prefillMin: 0.70, prefillMax: 0.90, vendors: ['nvidia'],             schedulingMode: 'continuous' },
   // SGLang vs vLLM v0.6.0（sgl-project/sglang benchmark_vllm_060 实测）
   // Llama 3.1 8B A100 offline: SGLang 4281 vs vLLM 4132 tok/s (+3.6%)
   // Llama 3.1 70B 4×H100 online rate=8: SGLang 4064 vs vLLM 3752 tok/s (+8.3%)

@@ -9,6 +9,7 @@ export default {
   params: 27.0,
   layers: 62,
   kv_heads: 16,
+  query_heads: 32,
   head_dim: 128,
   local_layers: 52,
   sliding_window: 1024,

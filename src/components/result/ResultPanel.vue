@@ -17,6 +17,7 @@ const props = defineProps({
   quantMatrix: Array,
   gpuVendor: String,
   gpu: Object,
+  gpuMemoryUtilization: { type: Number, default: null },
   gpuCount: Number,
   ppCount: { type: Number, default: 1 },
   epCount: { type: Number, default: 1 },
@@ -27,6 +28,8 @@ const props = defineProps({
   // 命令生成相关
   ctx:                 Number,
   batch:               Number,
+  promptLen:           Number,
+  outputLen:           Number,
   kvCacheQuant:        Object,
   prefixCacheHit:      { type: Number, default: 0 },
   speculativeDecoding: { type: Boolean, default: false },
@@ -60,19 +63,36 @@ const quant = defineModel('quant', { required: true })
             "
             class="text-xs font-semibold px-2 py-0.5 rounded-full border flex-shrink-0"
           >{{ t(`accuracy.${result.accuracyTier}`) }}</span>
+          <span
+            v-if="model.localInference === false"
+            class="text-xs font-semibold px-2 py-0.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 flex-shrink-0"
+          >API</span>
+          <span
+            v-if="model.parameterEstimate"
+            class="text-xs font-semibold px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 flex-shrink-0"
+          >≈</span>
           <div class="text-base font-bold text-gray-900 truncate">{{ model.name }}</div>
         </div>
         <div v-if="gpu" class="flex-shrink-0 text-right">
           <div class="text-[10px] text-gray-400 mb-0.5">{{ t('result.current_gpu') }}</div>
-          <div class="text-sm font-semibold text-gray-800">{{ gpu.name }}</div>
-          <div v-if="gpuCount > 1" class="text-xs text-gray-500 mt-0.5">× {{ gpuCount }}</div>
+          <div class="text-sm font-semibold text-gray-800">
+            {{ gpu.name }}
+            <span v-if="gpu.modified" class="text-[9px] rounded bg-amber-100 px-1 py-0.5 text-amber-700">MOD</span>
+          </div>
+          <div v-if="gpu.unitKind === 'system'" class="text-xs text-gray-500 mt-0.5">
+            {{ t('gpu.system_unit_summary', {
+              systems: gpuCount,
+              physical: gpu.physicalGpuCount * gpuCount,
+            }) }}
+          </div>
+          <div v-else-if="gpuCount > 1" class="text-xs text-gray-500 mt-0.5">× {{ gpuCount }}</div>
         </div>
       </div>
       <!-- 底部：模型参数横排 -->
       <div class="grid grid-cols-3 divide-x divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
         <div class="px-3 py-2 min-w-0">
           <div class="text-[10px] text-gray-400 whitespace-nowrap">{{ t('model.custom.params') }}</div>
-          <div class="text-sm font-bold text-gray-800 mt-0.5">{{ fmtParams(model.params) }}</div>
+          <div class="text-sm font-bold text-gray-800 mt-0.5">{{ model.parameterEstimate ? '≈' : '' }}{{ fmtParams(model.params) }}</div>
         </div>
         <div class="px-3 py-2 min-w-0">
           <div class="text-[10px] text-gray-400 whitespace-nowrap">{{ t('model.custom.max_ctx') }}</div>
@@ -89,11 +109,20 @@ const quant = defineModel('quant', { required: true })
       </div>
     </div>
     <WarningList :result="result" />
-    <VramCard :result="result" :quant-matrix="quantMatrix" :current-quant-id="result?.quantId" :gpu-count="gpuCount" @select-quant="quant = $event" />
+    <VramCard
+      :result="result"
+      :quant-matrix="quantMatrix"
+      :current-quant-id="result?.quantId"
+      :gpu-count="gpuCount"
+      :readonly="readonly"
+      @select-quant="quant = $event"
+    />
 
     <SpeedCard
       :result="result"
       :gpu-vendor="gpuVendor"
+      :gpu="gpu"
+      :gpu-memory-utilization="gpuMemoryUtilization"
       :readonly="readonly"
       v-model:framework="framework"
       :model="props.model"
@@ -102,6 +131,8 @@ const quant = defineModel('quant', { required: true })
       :ep-count="epCount"
       :ctx="ctx"
       :batch="batch"
+      :prompt-len="promptLen"
+      :output-len="outputLen"
       :quant="quant"
       :kv-cache-quant="kvCacheQuant"
       :prefix-cache-hit="prefixCacheHit"

@@ -8,10 +8,12 @@ export default {
   type: 'dense',
   params: 3.0,
   layers: 26,
-  kv_heads: 16,
+  query_heads: 8,
+  kv_heads: 1,
   head_dim: 256,
   hidden_size: 2048,
   max_ctx: 8192,
+  vision_seq_tokens: 256,
   tags: ['vision'],
 
   links: {

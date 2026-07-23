@@ -17,6 +17,9 @@ export default {
   hidden_size: 7680,
   max_ctx: 245760,
   tags: ['chat', 'multilingual'],
+  localInference: false,
+  availability: 'api-only',
+  parameterEstimate: true,
   links: {
     hf: 'https://huggingface.co/MiniMaxAI',
   },

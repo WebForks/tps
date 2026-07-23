@@ -18,18 +18,31 @@ ChartJS.register(LinearScale, PointElement, LineElement, LineController, Tooltip
 const { t } = useI18n()
 const props = defineProps({ result: Object })
 
+const hasRooflineData = computed(() => {
+  if (!props.result) return false
+  return [
+    props.result.decodeComputeLimit,
+    props.result.arithmeticIntensity,
+    props.result.ridgePoint,
+    props.result.effectiveToks,
+  ].every(value => Number.isFinite(Number(value)) && Number(value) > 0)
+})
+
 const chartData = computed(() => {
-  if (!props.result) return { datasets: [] }
+  if (!hasRooflineData.value) return { datasets: [] }
 
-  const { bwLimit, computeLimit, roofline } = props.result
-  const peak = Math.max(bwLimit, computeLimit) * 1.5
-
-  // Roofline 折线：带宽段 + 平坦段
-  const rooflinePoints = []
-  const ridgePoint = computeLimit / bwLimit  // arithmetic intensity ridge
-  for (let x = 0; x <= ridgePoint * 2; x += ridgePoint / 20) {
-    rooflinePoints.push({ x, y: Math.min(bwLimit * x, computeLimit) })
-  }
+  const {
+    decodeComputeLimit,
+    arithmeticIntensity,
+    ridgePoint,
+    effectiveToks,
+  } = props.result
+  const bandwidthSlope = decodeComputeLimit / ridgePoint
+  const maxX = Math.max(ridgePoint * 2, arithmeticIntensity * 1.25)
+  const rooflinePoints = Array.from({ length: 41 }, (_, index) => {
+    const x = maxX * index / 40
+    return { x, y: Math.min(bandwidthSlope * x, decodeComputeLimit) }
+  })
 
   return {
     datasets: [
@@ -46,7 +59,7 @@ const chartData = computed(() => {
       },
       {
         label: props.result.bottleneck === 'bandwidth' ? t('result.bandwidth') : t('result.compute'),
-        data: [{ x: roofline, y: props.result.decodeToks }],
+        data: [{ x: arithmeticIntensity, y: effectiveToks }],
         backgroundColor: props.result.bottleneck === 'bandwidth' ? '#f97316' : '#16a34a',
         pointRadius: 8,
         pointHoverRadius: 10,
@@ -86,8 +99,10 @@ const chartOptions = computed(() => ({
   <div class="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
     <h3 class="text-sm font-semibold text-gray-700 mb-3">{{ t('result.roofline_title') }}</h3>
     <div class="h-52 min-w-0">
-      <Scatter v-if="result" :data="chartData" :options="chartOptions" />
-      <div v-else class="h-full flex items-center justify-center text-gray-400 text-sm">选择模型和显卡后显示</div>
+      <Scatter v-if="hasRooflineData" :data="chartData" :options="chartOptions" />
+      <div v-else class="h-full flex items-center justify-center text-center text-gray-400 text-sm">
+        {{ t('result.roofline_unavailable') }}
+      </div>
     </div>
   </div>
 </template>

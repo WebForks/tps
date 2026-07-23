@@ -10,6 +10,7 @@ export default {
   params: 5.1,
   layers: 35,
   kv_heads: 1,           // local (sliding) attention KV heads
+  query_heads: 8,
   head_dim: 256,
   global_head_dim: 512,  // global attention head dim (global_kv_heads same as local = 1)
   local_layers: 28,      // sliding window layer count

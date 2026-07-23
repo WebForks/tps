@@ -5,11 +5,16 @@ export default {
   released: '2024-07',
   name: 'Codestral Mamba 7B',
   type: 'dense',
+  architecture: 'mamba',
   params: 7.3,
-  layers: 56,
+  layers: 64,
   kv_heads: 0, // Mamba uses SSM, not traditional attention
-  head_dim: 0,
+  head_dim: 64,
   hidden_size: 4096,
+  linear_num_value_heads: 128,
+  ssm_expansion: 2,
+  ssm_state_size: 128,
+  ssm_conv_kernel: 4,
   max_ctx: 262144,
   tags: ['chat', 'code'],
 

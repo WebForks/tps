@@ -46,10 +46,10 @@
 
 ## Features
 
-- 🎯 **Accurate Modeling** — Weights, KV Cache, system overhead fully covered with OOM risk warnings
-- ⚡ **Performance Analysis** — Precise Decode/Prefill token/s calculation, comprehensive TTFT/TPOT/total latency evaluation
+- 🎯 **Capacity Modeling** — Complete runnability checks for weights, KV/state, activations, runtime overhead, VRAM, and system RAM
+- ⚡ **Performance Analysis** — Engineering estimates for Decode/Prefill, TTFT/TPOT, and total latency bounded by physical bandwidth and compute ceilings
 - 📊 **Roofline Model** — Scientific bandwidth/compute bottleneck identification
-- 🌍 **Wide Coverage** — 170+ GPU models, 351+ mainstream models (Dense 280 + MoE 71)
+- 🌍 **Wide Coverage** — 250 hardware entries and 368 canonical models (Dense 301 + MoE 67)
 - 🔗 **Advanced Features** — Tensor Parallel, Flash Attention, KV Cache quantization, Prefix Cache
 - 🎨 **Multi-Framework** — vLLM, TensorRT-LLM, SGLang, LMDeploy, TGI, llama.cpp, ExLlamaV2, MLX
 
@@ -57,12 +57,12 @@
 
 | Category | Details |
 | --- | --- |
-| **Models** | 351+ mainstream models (Dense 280 + MoE 71) · 0.5B - 671B parameters · 2022-2026 releases |
+| **Models** | 368 canonical models (Dense 301 + MoE 67) · 0.13B - 1.6T parameters · 2022-2026 releases |
 | **Architectures** | Dense · MoE · MLA (DeepSeek) · Hybrid Attention (Gemma) · Mamba (SSM) |
-| **GPUs** | 170+ models · NVIDIA (RTX/Tesla/H100/B200/B300) · AMD (RX/MI) · Intel Arc · Apple Silicon · Domestic chips |
+| **GPUs** | 250 models · NVIDIA (RTX/Tesla/H100/B200/B300) · AMD (RX/MI) · Intel Arc · Apple Silicon · Domestic chips |
 | **Quantization** | FP32 · BF16 · FP8 · INT8 · INT4 · Q6_K · Q5_K · Q3_K · INT2 |
 | **Frameworks** | vLLM · TensorRT-LLM · SGLang · LMDeploy · TGI · llama.cpp · ExLlamaV2 · MLX |
-| **Advanced** | Flash Attention · KV Cache Quantization · Prefix Cache · MoE CPU Offload |
+| **Advanced** | Flash Attention · KV Cache Quantization · Prefix Cache · MoE/layer CPU Offload · DDR3/4/5 rate, channels, measured bandwidth, and system-RAM capacity |
 
 ## Use Cases
 
@@ -89,11 +89,11 @@ Visit **[tps.bunai.cc](https://tps.bunai.cc)** to use it online without installa
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tps-calculator.git
-cd tps-calculator
+git clone https://github.com/adiudiuu/tps.git
+cd tps
 
-# Install dependencies
-npm install
+# Install the locked dependency set
+npm ci
 
 # Start dev server
 npm run dev
@@ -101,13 +101,16 @@ npm run dev
 # Build for production
 npm run build
 
+# Run catalog, calculation, solver, command, benchmark, and build checks
+npm run check
+
 # Preview production build
 npm run preview
 ```
 
 ### Requirements
 
-- Node.js >= 18.0.0
+- Node.js ^20.19.0 or >= 22.12.0
 - npm >= 9.0.0
 - Modern browser (Chrome, Firefox, Safari, Edge)
 
@@ -122,7 +125,7 @@ src/
 │   └── ui/          # Generic UI components
 ├── data/            # Data definitions
 │   ├── gpus/        # GPU specifications (by vendor)
-│   ├── models/      # Model parameters (348+ models)
+│   ├── models/      # Model parameters (368 canonical models)
 │   ├── constants.js # Quantization/Framework/Interconnect constants
 │   └── runtime.js   # Runtime configuration options
 ├── utils/           # Utility functions
@@ -265,7 +268,7 @@ This project uses a **Custom Non-Commercial License**. See [LICENSE](LICENSE) fo
 
 - **Model Parameters** — [HuggingFace](https://huggingface.co), [Ollama](https://ollama.com), [ModelScope](https://modelscope.cn) and other official model repositories
 - **GPU Specifications** — Official technical documentation from various vendors
-- **Model Coverage** — 351+ models spanning 2022-2026 mainstream open-source models, parameter scales from 0.5B to 671B
+- **Model Coverage** — 368 canonical models spanning 2022-2026, parameter scales from 0.13B to 1.6T
 
 ### Theoretical Foundation
 
@@ -300,8 +303,8 @@ This project uses a **Custom Non-Commercial License**. See [LICENSE](LICENSE) fo
 
 ## Contact
 
-- 🐛 **Issue Reports** — [GitHub Issues](https://github.com/yourusername/tps-calculator/issues)
-- 💬 **Discussions** — [GitHub Discussions](https://github.com/yourusername/tps-calculator/discussions)
+- 🐛 **Issue Reports** — [GitHub Issues](https://github.com/adiudiuu/tps/issues)
+- 💬 **Discussions** — [GitHub Discussions](https://github.com/adiudiuu/tps/discussions)
 - 📧 **Commercial Licensing** — Contact via Issues or project homepage
 
 ---

@@ -9,6 +9,7 @@ export default {
   params: 9.0,
   layers: 42,
   kv_heads: 4,
+  query_heads: 16,
   head_dim: 256,
   hidden_size: 3584,
   max_ctx: 8192,

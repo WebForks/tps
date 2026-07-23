@@ -1,10 +1,22 @@
 <script setup>
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fmtMs } from '../../utils/format.js'
 import TipIcon from '../ui/TipIcon.vue'
 
 const { t } = useI18n()
-defineProps({ result: Object, readonly: Boolean })
+const props = defineProps({ result: Object, readonly: Boolean })
+
+const displayedTpot = computed(() => {
+  const effectiveTpot = Number(props.result?.effectiveTpot)
+  if (props.result?.effectiveTpot != null && Number.isFinite(effectiveTpot)) return effectiveTpot
+  const singleToks = Number(props.result?.singleToks)
+  return Number.isFinite(singleToks) && singleToks > 0 ? 1000 / singleToks : props.result?.tpot
+})
+
+const displayedTotalLatency = computed(() =>
+  props.result?.effectiveTotalLatency ?? props.result?.totalLatency
+)
 </script>
 
 <template>
@@ -21,12 +33,18 @@ defineProps({ result: Object, readonly: Boolean })
         <div class="text-xl font-bold text-emerald-600 tabular-nums">{{ fmtMs(result.ttft) }}</div>
       </div>
       <div class="px-4 py-3 min-w-0">
-        <div class="text-[10px] text-gray-400 mb-1 whitespace-nowrap">{{ t('result.tpot') }}</div>
-        <div class="text-xl font-bold text-amber-500 tabular-nums">{{ fmtMs(result.tpot) }}</div>
+        <div class="text-[10px] text-gray-400 mb-1 flex items-center gap-1 whitespace-nowrap">
+          {{ t('result.tpot') }}
+          <TipIcon :text="t('result.tpot_tip')" />
+        </div>
+        <div class="text-xl font-bold text-amber-500 tabular-nums">{{ fmtMs(displayedTpot) }}</div>
       </div>
       <div class="px-4 py-3 min-w-0">
-        <div class="text-[10px] text-gray-400 mb-1 whitespace-nowrap">{{ t('result.latency') }}</div>
-        <div class="text-xl font-bold text-blue-500 tabular-nums">{{ fmtMs(result.totalLatency) }}</div>
+        <div class="text-[10px] text-gray-400 mb-1 flex items-center gap-1 whitespace-nowrap">
+          {{ t('result.latency') }}
+          <TipIcon :text="t('result.latency_tip')" />
+        </div>
+        <div class="text-xl font-bold text-blue-500 tabular-nums">{{ fmtMs(displayedTotalLatency) }}</div>
       </div>
     </div>
 
@@ -51,7 +69,7 @@ defineProps({ result: Object, readonly: Boolean })
     </div>
 
     <!-- 能效比 -->
-    <div v-if="result && result.tokPerJoule != null" class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+    <div v-if="result && !result.pureCpu && result.tokPerJoule != null" class="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
       <div class="flex items-center gap-1.5">
         <span class="text-[10px] text-gray-400">{{ t('result.energy_efficiency') }}</span>
         <TipIcon :text="t('result.energy_efficiency_tip')" />

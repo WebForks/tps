@@ -11,6 +11,7 @@ export default {
   params: 30.7,
   layers: 60,
   kv_heads: 16,          // local (sliding) attention KV heads
+  query_heads: 32,
   head_dim: 256,
   global_kv_heads: 4,    // global (full) attention KV heads
   global_head_dim: 512,  // global attention head dim

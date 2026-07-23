@@ -10,13 +10,19 @@ export default {
   experts: 256,
   experts_per_token: 8,
   layers: 40,
+  query_heads: 16,
   kv_heads: 2,           // full attention KV heads
   head_dim: 256,
-  local_layers: 30,      // linear attention layers (no standard KV cache)
-  sliding_window: 0,     // linear attention 不占用 KV cache
+  linear_attention_layers: 30,
+  linear_num_key_heads: 16,
+  linear_num_value_heads: 32,
+  linear_key_head_dim: 128,
+  linear_value_head_dim: 128,
+  linear_conv_kernel_dim: 4,
+  linear_state_bytes: 4, // mamba_ssm_dtype=float32
   hidden_size: 2048,
   max_ctx: 262144,
-  tags: ['chat', 'multilingual'],
+  tags: ['chat', 'multilingual', 'vision', 'multimodal'],
   released: '2026-04',
   links: {
     hf: 'https://huggingface.co/Qwen/Qwen3.6-35B-A3B',

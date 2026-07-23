@@ -54,6 +54,8 @@ const props = defineProps({
   ctx: Number, batch: Number, promptLen: Number, outputLen: Number,
   flashAttention: Boolean, kvCacheQuant: Object,
   prefixCacheHit: Number, cpuOffload: Boolean, pcieBw: Object,
+  pcieWidth: Object, pureCpu: Boolean, cpuMemBw: Object,
+  cpuTflops: Number, gpuMemoryUtilization: Number, sysRam: Number,
 })
 
 const githubUrl = 'https://github.com/adiudiuu/tps'
@@ -69,7 +71,8 @@ function toggleLang() {
   } else {
     url.searchParams.delete('lang')
   }
-  window.history.replaceState({}, '', url.toString())
+  // Preserve Vue Router's position/scroll metadata for this history entry.
+  window.history.replaceState(window.history.state, '', url.toString())
 }
 
 function shareUrl() {
@@ -87,6 +90,9 @@ function exportMarkdown() {
     ctx: props.ctx, batch: props.batch, promptLen: props.promptLen, outputLen: props.outputLen,
     flashAttention: props.flashAttention, kvCacheQuant: props.kvCacheQuant,
     prefixCacheHit: props.prefixCacheHit, cpuOffload: props.cpuOffload, pcieBw: props.pcieBw,
+    pcieWidth: props.pcieWidth, pureCpu: props.pureCpu, cpuMemBw: props.cpuMemBw,
+    cpuTflops: props.cpuTflops, gpuMemoryUtilization: props.gpuMemoryUtilization,
+    sysRam: props.sysRam,
     result: props.result, t, locale: locale.value,
   })
   downloadMarkdown(content, buildFilename(props.model, props.gpu, props.quant))

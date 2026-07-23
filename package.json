@@ -3,11 +3,18 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "benchmark": "node scripts/benchmark-regression.mjs"
+    "benchmark": "node scripts/benchmark-regression.mjs",
+    "test:export": "node scripts/export-regression.mjs",
+    "test:i18n": "node scripts/i18n-regression.mjs",
+    "test": "node scripts/catalog-regression.mjs && node scripts/i18n-regression.mjs && node scripts/calculation-regression.mjs && node scripts/state-regression.mjs && node scripts/solver-regression.mjs && node scripts/runtime-command-regression.mjs && node scripts/export-regression.mjs && node scripts/benchmark-regression.mjs",
+    "check": "npm test && npm run build"
   },
   "dependencies": {
     "autoprefixer": "^10.5.0",
@@ -21,7 +28,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
-    "sharp": "^0.34.5",
     "vite": "^8.0.10",
     "vite-plugin-pwa": "^1.2.0"
   }

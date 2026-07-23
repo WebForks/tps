@@ -14,6 +14,7 @@ export default {
   hidden_size: 12288,
   max_ctx: 131072,
   vision_encoder_params: 0.4,  // 400M vision encoder (SigLIP-style)
+  params_scope: 'total',
   vision_seq_tokens: 1024,      // 高分辨率图可达 1024 patch tokens
   tags: ['chat', 'multimodal'],
   links: {

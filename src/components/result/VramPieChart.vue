@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Doughnut } from 'vue-chartjs'
+import { getDisplayVramBreakdown } from '../../utils/vramBreakdown.js'
 import {
   Chart as ChartJS,
   ArcElement,
@@ -16,13 +17,13 @@ const props = defineProps({ result: Object })
 
 const chartData = computed(() => {
   if (!props.result) return { labels: [], datasets: [] }
-  const { weightGB, kvGB, overheadGB } = props.result
+  const { weightGB, kvGB, overheadGB, activationGB } = getDisplayVramBreakdown(props.result)
   return {
-    labels: [t('result.weight'), t('result.kv'), t('result.overhead')],
+    labels: [t('result.weight'), t('result.kv'), t('result.activation'), t('result.overhead')],
     datasets: [{
-      data: [weightGB, kvGB, overheadGB].map(v => +v.toFixed(2)),
-      backgroundColor: ['#10b981', '#f59e0b', '#64748b'],
-      borderColor: ['#059669', '#d97706', '#475569'],
+      data: [weightGB, kvGB, activationGB, overheadGB].map(v => +v.toFixed(2)),
+      backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#64748b'],
+      borderColor: ['#059669', '#d97706', '#2563eb', '#475569'],
       borderWidth: 1,
     }],
   }
@@ -47,10 +48,10 @@ const chartOptions = {
 
 <template>
   <div class="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
-    <h3 class="text-sm font-semibold text-gray-700 mb-3">{{ t('result.vram_pie_title') }}</h3>
+    <h3 class="text-sm font-semibold text-gray-700 mb-3">{{ t(result?.pureCpu ? 'result.ram_pie_title' : 'result.vram_pie_title') }}</h3>
     <div class="h-44 min-w-0">
       <Doughnut v-if="result" :data="chartData" :options="chartOptions" />
-      <div v-else class="h-full flex items-center justify-center text-gray-400 text-sm">选择模型和显卡后显示</div>
+      <div v-else class="h-full flex items-center justify-center text-gray-400 text-sm">{{ t('result.empty_prompt') }}</div>
     </div>
   </div>
 </template>

@@ -5,9 +5,21 @@ import { useRouter, useRoute } from 'vue-router'
 import Header from '../components/layout/Header.vue'
 import ModelPicker from '../components/config/ModelPicker.vue'
 import ResultRowContent from '../components/result/SolverResultRow.vue'
-import { ALL_MODELS } from '../data/models/index.js'
+import { ALL_MODELS, resolveModelId } from '../data/models/index.js'
 import { GPU_LIST } from '../data/gpus/index.js'
-import { QUANT_MAP } from '../data/constants.js'
+import { FRAMEWORK_MAP, INTERCONNECT_MAP, QUANT_MAP } from '../data/constants.js'
+import {
+  KV_CACHE_MAP,
+  PCIE_BW_OPTIONS,
+  PCIE_WIDTH_OPTIONS,
+  createCpuMemBwOption,
+  normalizeCpuMemMeasuredBandwidth,
+  normalizeCpuTflops,
+  normalizeRamCapacity,
+  resolveCpuMemBwOption,
+} from '../data/runtime.js'
+import { aggregateGpuSlots } from '../utils/calc.js'
+import { readUrlState, resolveUrlState } from '../utils/useUrlState.js'
 import {
   solveForModel,
   solveUpgrade,
@@ -21,17 +33,23 @@ const route = useRoute()
 
 const _p = route.query
 const hasInitialQuery = Object.keys(_p).length > 0
+const resolvedInitialUrl = hasInitialQuery
+  ? resolveUrlState(readUrlState())
+  : null
 
 const LIMITS = {
+  targetSpeed: { min: 1, max: 100000, def: 100 },
+  maxGpuCount: { min: 1, max: 8, def: 4 },
   minDecodeSpeed: { min: 1, max: 100000 },
   maxTtft: { min: 1, max: 600000 },
-  ctx: { min: 512, max: 262144, def: 4096 },
+  ctx: { min: 512, max: 10_485_760, def: 4096 },
   batch: { min: 1, max: 256, def: 1 },
   promptLen: { min: 1, max: 262144, def: 512 },
   outputLen: { min: 1, max: 131072, def: 256 },
 }
 
 function clampInt(value, { min, max, def }) {
+  if (value === '' || value == null) return def
   const n = Number(value)
   if (!Number.isFinite(n)) return def
   const rounded = Math.round(n)
@@ -47,31 +65,75 @@ function clampOptionalPositive(value, { min, max }) {
   return Math.min(max, rounded)
 }
 
+function addCustomModelQuery(query, selectedModel) {
+  if (selectedModel?.id !== 'custom') return query
+  Object.assign(query, {
+    cmn: selectedModel.name,
+    cmt: selectedModel.type,
+    cmp: selectedModel.params,
+    cma: selectedModel.type === 'moe' ? selectedModel.active_params : undefined,
+    cml: selectedModel.layers,
+    cmkv: selectedModel.kv_heads,
+    cmqh: selectedModel.query_heads,
+    cmhd: selectedModel.head_dim,
+    cmhs: selectedModel.hidden_size,
+    cmctx: selectedModel.max_ctx,
+    cmexp: selectedModel.type === 'moe' ? selectedModel.experts : undefined,
+    cmk: selectedModel.type === 'moe' ? selectedModel.experts_per_token : undefined,
+    cmmla: selectedModel.mla_ratio,
+  })
+  return query
+}
+
 // ── 升级模式检测 ──────────────────────────────────────
 const isUpgradeMode = ref(_p.upgrade === '1')
 
-// 解析当前 GPU
-const parseCurrentGpu = () => {
-  const gpusParam = _p.gpus?.split(',')[0]
-  const gpuId = gpusParam?.split(':')[0] || _p.gpu
-  return GPU_LIST.find(g => g.id === gpuId) ?? null
-}
-const currentGpu = ref(parseCurrentGpu())
+function parseCurrentGpuSlots() {
+  let remaining = 512
+  const parsed = []
+  for (const entry of String(_p.gpus ?? '').split(',')) {
+    if (remaining <= 0) break
+    const [id, count] = entry.split(':')
+    const gpu = GPU_LIST.find(item => item.id === id && item.unitKind !== 'cpu') ?? null
+    if (!gpu) continue
+    const normalizedCount = clampInt(count, { min: 1, max: remaining, def: 1 })
+    parsed.push({ gpu, count: normalizedCount })
+    remaining -= normalizedCount
+  }
+  if (parsed.length) return parsed
 
-// 解析当前 GPU 数量
-const parseCurrentGpuCount = () => {
-  const gpusParam = _p.gpus?.split(',')[0]
-  const count = gpusParam?.split(':')[1]
-  return count ? Number(count) : (_p.n ? Number(_p.n) : 1)
+  const gpu = GPU_LIST.find(item => item.id === _p.gpu && item.unitKind !== 'cpu')
+  return gpu
+    ? [{ gpu, count: clampInt(_p.n, { min: 1, max: 512, def: 1 }) }]
+    : []
 }
-const currentGpuCount = ref(parseCurrentGpuCount())
+
+const currentGpuSlots = ref(parseCurrentGpuSlots())
+const currentGpuCount = computed(() => currentGpuSlots.value.reduce(
+  (sum, slot) => sum + slot.count,
+  0,
+))
+const currentGpu = computed(() => {
+  if (!currentGpuSlots.value.length) return null
+  return currentGpuSlots.value.length === 1
+    ? currentGpuSlots.value[0].gpu
+    : aggregateGpuSlots(currentGpuSlots.value)
+})
 
 const currentQuant = ref(QUANT_MAP.find(q => q.id === _p.quant) ?? QUANT_MAP.find(q => q.id === 'bf16'))
-const targetSpeed = ref(_p.target ? Number(_p.target) : 100)
+const targetSpeed = ref(clampInt(_p.target, LIMITS.targetSpeed))
 
 // ── 模式 A：给定模型 ──────────────────────────────────
-const modelA = ref(ALL_MODELS.find(m => m.id === _p.model) ?? ALL_MODELS.find(m => m.id === 'deepseek_r1') ?? ALL_MODELS[0])
-const maxGpuCount = ref(_p.maxg ? Math.max(1, Number(_p.maxg)) : 4)
+const restoredCustomModel = _p.model === 'custom'
+  ? resolvedInitialUrl?.model
+  : null
+const modelA = ref(
+  restoredCustomModel
+  ?? ALL_MODELS.find(m => m.id === resolveModelId(_p.model))
+  ?? ALL_MODELS.find(m => m.id === 'deepseek_r1')
+  ?? ALL_MODELS[0]
+)
+const maxGpuCount = ref(clampInt(_p.maxg, LIMITS.maxGpuCount))
 const vendorFilter = ref(['all', 'nvidia', 'amd', 'apple', 'intel', 'domestic'].includes(_p.vendor) ? _p.vendor : 'all')
 const quantFloor = ref(QUANT_FLOOR_OPTIONS.some(q => q.id === _p.qf) ? _p.qf : 'none')
 // 默认过滤数据中心卡（消费级优先）；仅当显式传入 excl_dc=0 时展示全部
@@ -85,6 +147,85 @@ const batch = ref(clampInt(_p.b ?? LIMITS.batch.def, LIMITS.batch))
 const promptLen = ref(clampInt(_p.pl ?? LIMITS.promptLen.def, LIMITS.promptLen))
 const outputLen = ref(clampInt(_p.ol ?? LIMITS.outputLen.def, LIMITS.outputLen))
 
+function parseOffloadMode(value) {
+  if (value === '1' || value === 'on') return 'on'
+  if (value === '0' || value === 'off') return 'off'
+  return 'auto'
+}
+
+const currentFramework = ref(
+  resolvedInitialUrl?.framework
+  ?? FRAMEWORK_MAP.find(option => option.id === _p.fw)
+  ?? null
+)
+const currentInterconnect = ref(
+  resolvedInitialUrl?.interconnect
+  ?? INTERCONNECT_MAP.find(option => option.id === _p.ic)
+  ?? null
+)
+const flashAttention = ref(resolvedInitialUrl?.flashAttention ?? _p.fa !== '0')
+const kvCacheQuant = ref(
+  resolvedInitialUrl?.kvCacheQuant
+  ?? KV_CACHE_MAP.find(option => option.id === _p.kv)
+  ?? KV_CACHE_MAP[0]
+)
+const prefixCacheHit = ref(Math.min(90, Math.max(0, Number(_p.pc) || 0)))
+const cpuOffloadMode = ref(resolvedInitialUrl?.cpuOffloadMode ?? parseOffloadMode(_p.co))
+const pureCpu = ref(resolvedInitialUrl?.pureCpu ?? _p.pcpu === '1')
+const cpuOffload = computed(() => cpuOffloadMode.value === 'on' && !pureCpu.value)
+const pcieBw = ref(
+  resolvedInitialUrl?.pcieBw
+  ?? PCIE_BW_OPTIONS.find(option => option.id === _p.pcie)
+  ?? PCIE_BW_OPTIONS[1]
+)
+const pcieWidth = ref(
+  resolvedInitialUrl?.pcieWidth
+  ?? PCIE_WIDTH_OPTIONS.find(option => option.id === _p.pw)
+  ?? PCIE_WIDTH_OPTIONS[1]
+)
+const baseCpuMemBw = resolvedInitialUrl?.cpuMemBw
+  ?? resolveCpuMemBwOption(_p.cmb)
+  ?? resolveCpuMemBwOption('ddr5_4800')
+const cpuMemBw = ref(createCpuMemBwOption(
+  baseCpuMemBw.generation,
+  baseCpuMemBw.transferRate,
+  clampInt(_p.cmc ?? baseCpuMemBw.channels, { min: 1, max: 16, def: 2 }),
+  normalizeCpuMemMeasuredBandwidth(_p.cmm, baseCpuMemBw.measuredBw),
+))
+const cpuTflops = ref(resolvedInitialUrl?.cpuTflops ?? normalizeCpuTflops(_p.ctf))
+const gpuMemoryUtilization = ref(
+  resolvedInitialUrl?.gpuMemoryUtilization
+  ?? (_p.gmu == null ? null : Math.min(1, Math.max(0.5, Number(_p.gmu) || 0.9)))
+)
+const sysRam = ref(normalizeRamCapacity(resolvedInitialUrl?.sysRam ?? _p.sr, 64))
+const speculativeDecoding = ref(_p.sd === '1')
+const acceptanceRate = ref(Math.min(0.9, Math.max(0.3, Number(_p.ar) || 0.7)))
+const draftLen = ref(clampInt(_p.dl, { min: 2, max: 8, def: 4 }))
+const draftModelParams = ref(Math.min(32, Math.max(0.1, Number(_p.dmp) || 1)))
+const ppCount = ref(clampInt(_p.pp, { min: 1, max: 512, def: 1 }))
+const epCount = ref(clampInt(_p.ep, { min: 1, max: 512, def: 1 }))
+const imageCount = ref(clampInt(_p.img, { min: 0, max: 8, def: 0 }))
+const nglCount = ref(_p.ngl == null
+  ? null
+  : clampInt(_p.ngl, { min: 0, max: 1000, def: 0 }))
+
+watch([modelA, draftModelParams, nglCount], ([selectedModel, draftParams, ngl]) => {
+  const draftCap = Math.max(
+    0.5,
+    Math.min(32, Number(selectedModel?.active_params ?? selectedModel?.params ?? 8) * 0.5),
+  )
+  const normalizedDraft = Math.min(draftCap, Math.max(0.1, Number(draftParams) || 1))
+  if (draftParams !== normalizedDraft) draftModelParams.value = normalizedDraft
+
+  if (ngl != null && Number.isFinite(Number(selectedModel?.layers))) {
+    const normalizedNgl = Math.min(
+      Math.max(0, Math.round(Number(ngl))),
+      Math.max(0, Math.round(Number(selectedModel.layers))),
+    )
+    if (ngl !== normalizedNgl) nglCount.value = normalizedNgl
+  }
+}, { immediate: true })
+
 // ── 求解状态 ──────────────────────────────────────────
 const solving = ref(false)
 const progress = ref(0)
@@ -92,8 +233,48 @@ const progressTotal = ref(0)
 const results = ref([])
 const hasRun = ref(false)
 const wasCancelled = ref(false)
+const validationError = ref(null)
 const visibleNonParetoCount = ref(50)
 const activeRunToken = ref(null)
+
+const modelContextMax = computed(() => {
+  const maxCtx = Number(modelA.value?.max_ctx)
+  return Number.isFinite(maxCtx) && maxCtx > 0
+    ? Math.min(LIMITS.ctx.max, maxCtx)
+    : LIMITS.ctx.max
+})
+
+const validationMessage = computed(() => {
+  const error = validationError.value
+  if (!error) return ''
+
+  const isZh = locale.value === 'zh'
+  if (error.code === 'model_local_inference_unsupported') {
+    return t('solver.api_only_model_validation', { model: error.modelName || error.modelId || '—' })
+  }
+  if (error.code === 'context_exceeds_model_limit') {
+    return isZh
+      ? `上下文长度 ${error.ctx.toLocaleString()} 超过了 ${error.modelName || '该模型'} 的上限 ${error.maxCtx.toLocaleString()}。`
+      : `Context length ${error.ctx.toLocaleString()} exceeds the ${error.modelName || 'model'} limit of ${error.maxCtx.toLocaleString()}.`
+  }
+  if (error.code === 'workload_exceeds_context') {
+    return isZh
+      ? `Prompt 与输出共 ${error.sequenceLength.toLocaleString()} tokens，超过了 ${error.ctx.toLocaleString()} 的上下文长度。`
+      : `Prompt plus output is ${error.sequenceLength.toLocaleString()} tokens, exceeding the ${error.ctx.toLocaleString()}-token context.`
+  }
+  if (error.code === 'apple_multi_device_unsupported') {
+    return isZh
+      ? 'Apple Silicon 统一内存配置只能按一台设备计算。'
+      : 'Apple Silicon unified memory configurations can only be calculated as one device.'
+  }
+  if (error.code === 'invalid_workload') {
+    return isZh
+      ? `${error.field} 必须是大于零的有效数字。`
+      : `${error.field} must be a valid number greater than zero.`
+  }
+
+  return isZh ? '输入参数无效，请检查后重试。' : 'The input configuration is invalid. Please review it and try again.'
+})
 
 // ── 结果排序 ──────────────────────────────────────────
 const sortBy = ref('speed') // speed | vram | gpuCount | speedPerGpu
@@ -113,8 +294,34 @@ const nonParetoResults = computed(() => sortedResults.value.filter(r => !r.isPar
 const visibleNonParetoResults = computed(() => nonParetoResults.value.slice(0, visibleNonParetoCount.value))
 
 // ── 求解入口 ──────────────────────────────────────────
+async function runWithTimeout(solver, params, runToken, timeoutMs) {
+  const attemptToken = { cancelled: false }
+  let timeoutId
+
+  try {
+    return await Promise.race([
+      solver({
+        ...params,
+        shouldCancel: () => runToken.cancelled || attemptToken.cancelled,
+      }),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          attemptToken.cancelled = true
+          reject(new Error('solver-timeout'))
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timeoutId != null) clearTimeout(timeoutId)
+  }
+}
+
 async function runSolver() {
   if (solving.value) return
+  const normalizedTargetSpeed = clampInt(targetSpeed.value, LIMITS.targetSpeed)
+  const normalizedMaxGpuCount = clampInt(maxGpuCount.value, LIMITS.maxGpuCount)
+  if (targetSpeed.value !== normalizedTargetSpeed) targetSpeed.value = normalizedTargetSpeed
+  if (maxGpuCount.value !== normalizedMaxGpuCount) maxGpuCount.value = normalizedMaxGpuCount
   const runToken = { cancelled: false }
   const HARD_TIMEOUT_MS = 4000
 
@@ -125,6 +332,7 @@ async function runSolver() {
   results.value = []
   hasRun.value = true
   wasCancelled.value = false
+  validationError.value = null
   visibleNonParetoCount.value = 50
 
   try {
@@ -133,6 +341,25 @@ async function runSolver() {
       batch: clampInt(batch.value, LIMITS.batch),
       promptLen: clampInt(promptLen.value, LIMITS.promptLen),
       outputLen: clampInt(outputLen.value, LIMITS.outputLen),
+      flashAttention: flashAttention.value,
+      kvCacheQuant: kvCacheQuant.value,
+      prefixCacheHit: prefixCacheHit.value,
+      cpuOffload: cpuOffload.value,
+      pcieBw: pcieBw.value,
+      pcieWidth: pcieWidth.value,
+      pureCpu: pureCpu.value,
+      cpuMemBw: cpuMemBw.value,
+      cpuTflops: cpuTflops.value,
+      gpuMemoryUtilization: gpuMemoryUtilization.value,
+      sysRam: sysRam.value,
+      speculativeDecoding: speculativeDecoding.value,
+      acceptanceRate: acceptanceRate.value,
+      draftLen: draftLen.value,
+      draftModelParams: draftModelParams.value,
+      ppCount: ppCount.value,
+      epCount: epCount.value,
+      imageCount: imageCount.value,
+      nglCount: nglCount.value,
       onProgress: (done, total) => {
         progress.value = done
         progressTotal.value = total
@@ -146,23 +373,24 @@ async function runSolver() {
       const upgradeParams = {
         currentGpu: currentGpu.value,
         currentGpuCount: currentGpuCount.value,
+        gpuSlots: currentGpuSlots.value,
         currentQuant: currentQuant.value,
+        currentFramework: currentFramework.value,
+        currentInterconnect: currentInterconnect.value,
         model: modelA.value,
-        targetSpeed: targetSpeed.value,
+        targetSpeed: normalizedTargetSpeed,
       }
+      const fullUpgradeParams = { ...upgradeParams, ...commonParams }
 
       try {
-        outcome = await Promise.race([
-          solveUpgrade({ ...upgradeParams, ...commonParams }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('solver-timeout')), HARD_TIMEOUT_MS)),
-        ])
+        outcome = await runWithTimeout(solveUpgrade, fullUpgradeParams, runToken, HARD_TIMEOUT_MS)
       } catch {
-        outcome = await solveUpgrade({ ...upgradeParams, shouldCancel: () => runToken.cancelled })
+        outcome = await solveUpgrade(fullUpgradeParams)
       }
 
       // 兜底：若首轮意外返回空结果，进行一次无进度回调的重算
-      if (!outcome?.cancelled && (outcome?.results?.length ?? 0) === 0) {
-        const retry = await solveUpgrade(upgradeParams)
+      if (!outcome?.cancelled && !outcome?.validationError && (outcome?.results?.length ?? 0) === 0) {
+        const retry = await solveUpgrade(fullUpgradeParams)
         if (!retry?.cancelled && (retry?.results?.length ?? 0) > 0) {
           outcome = retry
         }
@@ -170,7 +398,7 @@ async function runSolver() {
     } else {
       const solverParams = {
         model: modelA.value,
-        maxGpuCount: maxGpuCount.value,
+        maxGpuCount: normalizedMaxGpuCount,
         vendorFilter: vendorFilter.value,
         excludeDatacenterGpu: excludeDatacenterGpu.value,
         quantFloor: quantFloor.value,
@@ -178,19 +406,17 @@ async function runSolver() {
         maxTtft: clampOptionalPositive(maxTtft.value, LIMITS.maxTtft) || null,
         disableYield: true,
       }
+      const fullSolverParams = { ...solverParams, ...commonParams }
 
       try {
-        outcome = await Promise.race([
-          solveForModel({ ...solverParams, ...commonParams }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('solver-timeout')), HARD_TIMEOUT_MS)),
-        ])
+        outcome = await runWithTimeout(solveForModel, fullSolverParams, runToken, HARD_TIMEOUT_MS)
       } catch {
-        outcome = await solveForModel({ ...solverParams, shouldCancel: () => runToken.cancelled })
+        outcome = await solveForModel(fullSolverParams)
       }
 
       // 兜底：若首轮意外返回空结果，进行一次无进度回调的重算
-      if (!outcome?.cancelled && (outcome?.results?.length ?? 0) === 0) {
-        const retry = await solveForModel(solverParams)
+      if (!outcome?.cancelled && !outcome?.validationError && (outcome?.results?.length ?? 0) === 0) {
+        const retry = await solveForModel(fullSolverParams)
         if (!retry?.cancelled && (retry?.results?.length ?? 0) > 0) {
           outcome = retry
         }
@@ -203,6 +429,7 @@ async function runSolver() {
       }
       return
     }
+    validationError.value = outcome?.validationError ?? null
     if (!outcome || outcome.cancelled) {
       wasCancelled.value = true
       return
@@ -213,6 +440,7 @@ async function runSolver() {
     if (activeRunToken.value === runToken) {
       results.value = []
       wasCancelled.value = false
+      validationError.value = null
     }
   } finally {
     if (activeRunToken.value === runToken) {
@@ -232,22 +460,65 @@ function showMoreResults() {
 
 // ── 跳转到主计算器 ────────────────────────────────────
 function useConfig(row) {
+  const rowSlots = row.gpuSlots?.length
+    ? row.gpuSlots
+    : [{ gpu: row.gpu, count: row.gpuCount }]
+  const offloadMode = row.runtime
+    ? cpuOffloadMode.value
+    : 'off'
+  const usesCpuMemory = cpuOffload.value
+    || pureCpu.value
+    || rowSlots.some(slot => slot.gpu?.sharedMemory)
+  const sharedVram = rowSlots.find(slot =>
+    slot.gpu?.sharedMemory
+    && slot.gpu?.sharedMemoryConfigured
+    && Number(slot.gpu?.catalogVram ?? 0) <= 0
+  )?.gpu?.sharedVram
+  const cpuMemBaseId = cpuMemBw.value?.generation && cpuMemBw.value?.transferRate
+    ? `${cpuMemBw.value.generation}_${cpuMemBw.value.transferRate}`
+    : cpuMemBw.value?.id
+  const query = addCustomModelQuery({
+    gpus: rowSlots.map(slot => `${slot.gpu.id}:${slot.count}`).join(','),
+    ic: row.interconnect?.id,
+    model: modelA.value.id,
+    quant: row.quant.id,
+    fw: row.framework.id,
+    fa: flashAttention.value ? undefined : '0',
+    kv: kvCacheQuant.value?.id !== 'auto' ? kvCacheQuant.value?.id : undefined,
+    pc: prefixCacheHit.value > 0 ? prefixCacheHit.value : undefined,
+    co: offloadMode === 'auto' ? undefined : offloadMode,
+    pcie: cpuOffload.value ? pcieBw.value?.id : undefined,
+    pw: cpuOffload.value ? pcieWidth.value?.id : undefined,
+    pcpu: pureCpu.value ? '1' : undefined,
+    cmb: usesCpuMemory ? cpuMemBaseId : undefined,
+    cmc: usesCpuMemory && cpuMemBw.value?.channels !== 2
+      ? cpuMemBw.value.channels
+      : undefined,
+    cmm: usesCpuMemory && cpuMemBw.value?.measuredBw != null
+      ? cpuMemBw.value.measuredBw
+      : undefined,
+    ctf: cpuTflops.value != null ? cpuTflops.value : undefined,
+    gmu: gpuMemoryUtilization.value != null
+      ? gpuMemoryUtilization.value
+      : undefined,
+    sr: usesCpuMemory && sysRam.value !== 64 ? sysRam.value : undefined,
+    sv: sharedVram != null ? Math.max(1, Math.floor(sharedVram)) : undefined,
+    sd: speculativeDecoding.value ? '1' : undefined,
+    ar: speculativeDecoding.value && acceptanceRate.value !== 0.7 ? acceptanceRate.value : undefined,
+    dl: speculativeDecoding.value && draftLen.value !== 4 ? draftLen.value : undefined,
+    dmp: speculativeDecoding.value && draftModelParams.value !== 1 ? draftModelParams.value : undefined,
+    pp: row.ppCount > 1 ? row.ppCount : undefined,
+    ep: row.epCount > 1 ? row.epCount : undefined,
+    img: imageCount.value > 0 ? imageCount.value : undefined,
+    ngl: nglCount.value != null ? nglCount.value : undefined,
+    ctx: ctx.value,
+    b: batch.value,
+    pl: promptLen.value,
+    ol: outputLen.value,
+  }, modelA.value)
   router.push({
     path: '/',
-    query: {
-      gpu: row.gpu.id,
-      n: row.gpuCount,
-      ic: row.interconnect?.id,
-      model: modelA.value.id,
-      quant: row.quant.id,
-      fw: row.framework.id,
-      pp: row.ppCount > 1 ? row.ppCount : undefined,
-      ep: row.epCount > 1 ? row.epCount : undefined,
-      ctx: ctx.value,
-      b: batch.value,
-      pl: promptLen.value,
-      ol: outputLen.value,
-    },
+    query,
   })
 }
 
@@ -274,14 +545,36 @@ const SORT_OPTIONS = computed(() => [
 ])
 
 watch(
-  [modelA, maxGpuCount, vendorFilter, excludeDatacenterGpu, quantFloor, minDecodeSpeedA, maxTtft, ctx, batch, promptLen, outputLen, isUpgradeMode, currentGpu, currentGpuCount, currentQuant, targetSpeed],
-  ([model, maxg, vendor, excl_dc, qf, minds, mttft, ctxValue, batchValue, promptValue, outputValue, upgradeMode, curGpu, curGpuCount, curQuant, tgtSpeed]) => {
+  [modelA, maxGpuCount, vendorFilter, excludeDatacenterGpu, quantFloor, minDecodeSpeedA, maxTtft,
+   ctx, batch, promptLen, outputLen, isUpgradeMode, currentGpuSlots, currentQuant, targetSpeed,
+   currentFramework, currentInterconnect, flashAttention, kvCacheQuant, prefixCacheHit,
+   cpuOffloadMode, pcieBw, pcieWidth, pureCpu, cpuMemBw, cpuTflops, gpuMemoryUtilization,
+   sysRam, speculativeDecoding,
+   acceptanceRate, draftLen, draftModelParams, ppCount, epCount, imageCount, nglCount],
+  () => {
+    const model = modelA.value
+    const maxg = maxGpuCount.value
+    const vendor = vendorFilter.value
+    const excl_dc = excludeDatacenterGpu.value
+    const qf = quantFloor.value
+    const minds = minDecodeSpeedA.value
+    const mttft = maxTtft.value
+    const ctxValue = ctx.value
+    const batchValue = batch.value
+    const promptValue = promptLen.value
+    const outputValue = outputLen.value
+    const upgradeMode = isUpgradeMode.value
+    const curQuant = currentQuant.value
+    const tgtSpeed = targetSpeed.value
+    validationError.value = null
     const normalizedMinds = clampOptionalPositive(minds, LIMITS.minDecodeSpeed)
     const normalizedMttft = clampOptionalPositive(mttft, LIMITS.maxTtft)
     const normalizedCtx = clampInt(ctxValue, LIMITS.ctx)
     const normalizedBatch = clampInt(batchValue, LIMITS.batch)
     const normalizedPrompt = clampInt(promptValue, LIMITS.promptLen)
     const normalizedOutput = clampInt(outputValue, LIMITS.outputLen)
+    const normalizedMaxg = clampInt(maxg, LIMITS.maxGpuCount)
+    const normalizedTarget = clampInt(tgtSpeed, LIMITS.targetSpeed)
 
     if (minDecodeSpeedA.value !== normalizedMinds) minDecodeSpeedA.value = normalizedMinds
     if (maxTtft.value !== normalizedMttft) maxTtft.value = normalizedMttft
@@ -289,17 +582,61 @@ watch(
     if (batch.value !== normalizedBatch) batch.value = normalizedBatch
     if (promptLen.value !== normalizedPrompt) promptLen.value = normalizedPrompt
     if (outputLen.value !== normalizedOutput) outputLen.value = normalizedOutput
+    if (maxGpuCount.value !== normalizedMaxg) maxGpuCount.value = normalizedMaxg
+    if (targetSpeed.value !== normalizedTarget) targetSpeed.value = normalizedTarget
 
     const query = {}
     if (model?.id) query.model = model.id
+    addCustomModelQuery(query, model)
     if (upgradeMode) {
       query.upgrade = '1'
-      if (curGpu?.id) query.gpu = curGpu.id
-      if (curGpuCount !== 1) query.n = String(curGpuCount)
+      if (currentGpuSlots.value.length) {
+        query.gpus = currentGpuSlots.value
+          .map(slot => `${slot.gpu.id}:${slot.count}`)
+          .join(',')
+      }
       if (curQuant?.id) query.quant = curQuant.id
-      if (tgtSpeed !== 100) query.target = String(tgtSpeed)
+      if (normalizedTarget !== LIMITS.targetSpeed.def) query.target = String(normalizedTarget)
+      if (currentFramework.value?.id) query.fw = currentFramework.value.id
+      if (currentInterconnect.value?.id) query.ic = currentInterconnect.value.id
+      if (!flashAttention.value) query.fa = '0'
+      if (kvCacheQuant.value?.id && kvCacheQuant.value.id !== 'auto') query.kv = kvCacheQuant.value.id
+      if (prefixCacheHit.value > 0) query.pc = String(prefixCacheHit.value)
+      if (cpuOffloadMode.value !== 'auto') query.co = cpuOffloadMode.value
+      if (cpuOffload.value) {
+        if (pcieBw.value?.id) query.pcie = pcieBw.value.id
+        if (pcieWidth.value?.id) query.pw = pcieWidth.value.id
+      }
+      if (pureCpu.value) query.pcpu = '1'
+      const usesCpuMemory = cpuOffload.value
+        || pureCpu.value
+        || currentGpuSlots.value.some(slot => slot.gpu?.sharedMemory)
+      if (usesCpuMemory) {
+        if (cpuMemBw.value?.generation && cpuMemBw.value?.transferRate) {
+          query.cmb = `${cpuMemBw.value.generation}_${cpuMemBw.value.transferRate}`
+        } else if (cpuMemBw.value?.id) {
+          query.cmb = cpuMemBw.value.id
+        }
+        if (cpuMemBw.value?.channels !== 2) query.cmc = String(cpuMemBw.value.channels)
+        if (cpuMemBw.value?.measuredBw != null) query.cmm = String(cpuMemBw.value.measuredBw)
+        if (sysRam.value !== 64) query.sr = String(sysRam.value)
+      }
+      if (cpuTflops.value != null) query.ctf = String(cpuTflops.value)
+      if (gpuMemoryUtilization.value != null) {
+        query.gmu = String(gpuMemoryUtilization.value)
+      }
+      if (speculativeDecoding.value) {
+        query.sd = '1'
+        if (acceptanceRate.value !== 0.7) query.ar = String(acceptanceRate.value)
+        if (draftLen.value !== 4) query.dl = String(draftLen.value)
+        if (draftModelParams.value !== 1) query.dmp = String(draftModelParams.value)
+      }
+      if (ppCount.value !== 1) query.pp = String(ppCount.value)
+      if (epCount.value !== 1) query.ep = String(epCount.value)
+      if (imageCount.value !== 0) query.img = String(imageCount.value)
+      if (nglCount.value != null) query.ngl = String(nglCount.value)
     } else {
-      if (maxg !== 4) query.maxg = String(maxg)
+      if (normalizedMaxg !== LIMITS.maxGpuCount.def) query.maxg = String(normalizedMaxg)
       if (vendor !== 'all') query.vendor = vendor
       if (!excl_dc) query.excl_dc = '0'
       if (qf !== 'none') query.qf = qf
@@ -459,7 +796,7 @@ onMounted(() => {
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs text-gray-500 mb-1">{{ t('run.ctx') }}</label>
-                <input v-model.number="ctx" type="number" :min="LIMITS.ctx.min" :max="LIMITS.ctx.max"
+                <input v-model.number="ctx" type="number" :min="LIMITS.ctx.min" :max="modelContextMax"
                   class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <div>
@@ -535,7 +872,9 @@ onMounted(() => {
               <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="3"/>
               <path d="M22 22l20 20M42 22L22 42" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
             </svg>
-            <p class="text-sm">{{ wasCancelled ? t('solver.cancelled') : t('solver.no_results') }}</p>
+            <p class="text-sm" :class="{ 'text-amber-700': validationMessage }">
+              {{ validationMessage || (wasCancelled ? t('solver.cancelled') : t('solver.no_results')) }}
+            </p>
           </div>
 
           <!-- 结果列表 -->
