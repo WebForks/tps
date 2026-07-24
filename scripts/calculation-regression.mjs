@@ -19,6 +19,7 @@ import {
   PCIE_WIDTH_OPTIONS,
   calcCpuMemTheoreticalBandwidth,
   createCpuMemBwOption,
+  getDefaultPcieWidth,
   isKvCacheSupported,
 } from '../src/data/runtime.js'
 import { generateCmd, getCommandCompatibility } from '../src/utils/cmdGen.js'
@@ -112,11 +113,18 @@ const llamaCpp = byId(FRAMEWORK_MAP, 'llamacpp', 'Framework')
 const mlx = byId(FRAMEWORK_MAP, 'mlx', 'Framework')
 const lmdeploy = byId(FRAMEWORK_MAP, 'lmdeploy', 'Framework')
 const tgi = byId(FRAMEWORK_MAP, 'tgi', 'Framework')
+const trtllm = byId(FRAMEWORK_MAP, 'trtllm', 'Framework')
 const pcie4 = byId(INTERCONNECT_MAP, 'pcie4', 'Interconnect')
 const fp16Kv = byId(KV_CACHE_MAP, 'fp16', 'KV cache')
 const int4Kv = byId(KV_CACHE_MAP, 'int4', 'KV cache')
 const pcie5Host = byId(PCIE_BW_OPTIONS, 'gen5', 'PCIe host link')
 const pcieX16 = byId(PCIE_WIDTH_OPTIONS, 'x16', 'PCIe width')
+
+assert(
+  getDefaultPcieWidth(1).id === 'x16'
+    && getDefaultPcieWidth(5).id === 'x8',
+  'PCIe width defaults do not distinguish a primary single-GPU slot from multi-GPU layouts',
+)
 
 assert(
   new Set(GPU_LIST.map(gpu => gpu.id)).size === GPU_LIST.length,
@@ -362,7 +370,6 @@ approx(
 // the host-memory portion of a hybrid run.
 const hybridAllCpu = calcAll({
   ...common,
-  cpuOffload: true,
   pureCpu: false,
   cpuMemBw: ddr5,
   nglCount: 0,
@@ -379,7 +386,6 @@ approx(
 const normalAllGpu = calcAll({ ...common, cpuOffload: false })
 const hybridAllGpu = calcAll({
   ...common,
-  cpuOffload: true,
   cpuMemBw: ddr5,
   nglCount: llama8b.layers,
 })
@@ -393,6 +399,33 @@ approx(
   'All-GPU NGL decode compute',
 )
 assert(!hybridAllGpu.cpuComputeIsUpperBound, 'All-GPU NGL was marked as a CPU upper bound')
+
+const automaticNgl = calcAll({
+  ...common,
+  model: llama70b,
+  quant: bf16,
+  nglCount: null,
+  cpuMemBw: ddr5,
+})
+assert(
+  automaticNgl.autoNgl === automaticNgl.effectiveNgl
+    && automaticNgl.effectiveNgl > 0
+    && automaticNgl.effectiveNgl < Math.floor(llama70b.layers / 2),
+  'Automatic llama.cpp NGL did not derive a VRAM-fitting layer count',
+)
+const manualNglWithoutMoeOffload = calcAll({
+  ...common,
+  nglCount: 5,
+  cpuOffload: false,
+  cpuMemBw: ddr5,
+})
+assert(
+  manualNglWithoutMoeOffload.effectiveNgl === 5
+    && manualNglWithoutMoeOffload.nglCount === 5
+    && manualNglWithoutMoeOffload.isLlamaCppHybrid
+    && !manualNglWithoutMoeOffload.isMoeOffload,
+  'Manual NGL was still coupled to the MoE CPU-offload switch',
+)
 
 // CPU TFLOPS are optional. Without them, CPU-backed throughput is explicitly a
 // bandwidth-only upper bound; with them, the CPU compute roof is enforced.
@@ -1673,7 +1706,7 @@ assert(tgiCommand.includes('--kv-cache-dtype fp8_e4m3fn'), 'TGI command ignored 
 
 const mixedAmpere = aggregateGpuSlots([
   { gpu: rtx3090, count: 2 },
-  { gpu: rtx3080Mod, count: 2 },
+  { gpu: rtx3080Mod, count: 3 },
 ])
 assert(
   mixedAmpere.mixedGpu
@@ -1697,7 +1730,7 @@ assert(
 const mixedAmpereEstimate = calcAll({
   ...common,
   gpu: mixedAmpere,
-  gpuCount: 4,
+  gpuCount: 5,
   quant: bf16,
   framework: vllm,
 })
@@ -1713,7 +1746,7 @@ assert(
 const mixedAmpereCommandConfig = {
   model: llama8b,
   gpu: mixedAmpere,
-  gpuCount: 4,
+  gpuCount: 5,
   ppCount: 1,
   epCount: 1,
   ctx: common.ctx,
@@ -1731,13 +1764,27 @@ const mixedAmpereCommandCompatibility = getCommandCompatibility(
   mixedAmpereCommandConfig,
 )
 assert(
-  !mixedAmpereCommandCompatibility.supported
-    && mixedAmpereCommandCompatibility.reasons.some(
-      reason => reason.code === 'mixed-gpu-command-unsupported',
-    )
-    && generateCmd(vllm, mixedAmpereCommandConfig) === null,
-  'Mixed-GPU estimation incorrectly generated a topology-specific launch command',
+  mixedAmpereCommandCompatibility.supported
+    && generateCmd(vllm, mixedAmpereCommandConfig)?.includes(
+      'CUDA_VISIBLE_DEVICES=0,1,2,3,4',
+    ),
+  'Supported 2x3090 + 3x3080-mod configuration did not generate a vLLM command',
 )
+for (const runtime of [sglang, lmdeploy, tgi, llamaCpp, trtllm]) {
+  const command = generateCmd(runtime, mixedAmpereCommandConfig)
+  assert(
+    command
+      && (
+        command.includes('CUDA_VISIBLE_DEVICES=0,1,2,3,4')
+        || command.includes(`--gpus '"device=0,1,2,3,4"'`)
+        || (
+          command.includes('--device CUDA0,CUDA1,CUDA2,CUDA3,CUDA4')
+          && command.includes('--tensor-split 1,1,1,1,1')
+        )
+      ),
+    `Supported mixed Ampere configuration did not generate a ${runtime.id} command`,
+  )
+}
 
 const mixedArchitecture = aggregateGpuSlots([
   { gpu: rtx3090, count: 1 },

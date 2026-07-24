@@ -17,6 +17,25 @@ function formatRatio(value, fallback = 0.9) {
   return normalizeGpuMemoryUtilization(value, fallback).toFixed(2)
 }
 
+function mixedNvidiaDeviceIds(config) {
+  if (!config.gpu?.mixedGpu || config.gpu?.vendor !== 'nvidia') return null
+  return Array.from(
+    { length: positiveInteger(config.gpuCount) },
+    (_, index) => index,
+  )
+}
+
+function cudaCommandPrefix(config) {
+  const deviceIds = mixedNvidiaDeviceIds(config)
+  return deviceIds ? `CUDA_VISIBLE_DEVICES=${deviceIds.join(',')} ` : ''
+}
+
+function mixedGpuNote(config) {
+  const deviceIds = mixedNvidiaDeviceIds(config)
+  if (!deviceIds) return null
+  return '# Note: the mixed-GPU estimate uses equal shards; change the generated device list if these are not the intended cards.'
+}
+
 /**
  * Format shell arguments as a readable copyable command. Notes are comments,
  * not continuations, so the final argument never ends in a backslash.
@@ -54,8 +73,10 @@ function genVllm(hfModel, config) {
   } = config
   const tp = positiveInteger(gpuCount)
   const ep = positiveInteger(epCount)
-  const parts = [`vllm serve ${hfModel}`]
+  const parts = [`${cudaCommandPrefix(config)}vllm serve ${hfModel}`]
   const notes = []
+  const deviceNote = mixedGpuNote(config)
+  if (deviceNote) notes.push(deviceNote)
 
   // The estimator's EP dimension replicates attention/non-expert weights while
   // sharding experts over TP × EP. In vLLM that layout is TP × DP with EP
@@ -110,8 +131,13 @@ function genSglang(hfModel, config) {
     draftModelRepo,
     gpuMemoryUtilization,
   } = config
-  const parts = ['python -m sglang.launch_server', `--model-path ${hfModel}`]
+  const parts = [
+    `${cudaCommandPrefix(config)}python -m sglang.launch_server`,
+    `--model-path ${hfModel}`,
+  ]
   const notes = []
+  const deviceNote = mixedGpuNote(config)
+  if (deviceNote) notes.push(deviceNote)
   const tp = positiveInteger(gpuCount)
   const pp = positiveInteger(ppCount)
   const ep = positiveInteger(epCount)
@@ -173,8 +199,10 @@ function genLmdeploy(hfModel, config) {
     kvCacheQuant,
     prefixCacheHit,
   } = config
-  const parts = [`lmdeploy serve api_server ${hfModel}`]
+  const parts = [`${cudaCommandPrefix(config)}lmdeploy serve api_server ${hfModel}`]
   const notes = []
+  const deviceNote = mixedGpuNote(config)
+  if (deviceNote) notes.push(deviceNote)
 
   if (positiveInteger(gpuCount) > 1) parts.push(`--tp ${positiveInteger(gpuCount)}`)
   parts.push(`--session-len ${positiveInteger(ctx, 8192)}`)
@@ -217,6 +245,7 @@ function genTgi(hfModel, config) {
     gpuMemoryUtilization,
   } = config
   const vendor = gpu?.vendor ?? config.gpuVendor ?? 'nvidia'
+  const deviceIds = mixedNvidiaDeviceIds(config)
   const parts = vendor === 'amd'
     ? [
         'docker run --rm',
@@ -231,7 +260,9 @@ function genTgi(hfModel, config) {
         'ghcr.io/huggingface/text-generation-inference:3.3.5-rocm',
       ]
     : [
-        'docker run --rm --gpus all',
+        deviceIds
+          ? `docker run --rm --gpus '"device=${deviceIds.join(',')}"'`
+          : 'docker run --rm --gpus all',
         '--ipc=host',
         '-p 8080:80',
         '-v $PWD/data:/data',
@@ -260,7 +291,10 @@ function genTgi(hfModel, config) {
   }
   if (kvCacheQuant.id === 'fp8') parts.push('--kv-cache-dtype fp8_e4m3fn')
 
-  return formatCmd(parts)
+  const notes = []
+  const deviceNote = mixedGpuNote(config)
+  if (deviceNote) notes.push(deviceNote)
+  return formatCmd(parts, notes)
 }
 
 const GGUF_QUANT_MAP = Object.freeze({
@@ -274,13 +308,11 @@ const GGUF_QUANT_MAP = Object.freeze({
   int2: { suffix: 'Q2_K' },
 })
 
-function calcNgl(model, cpuOffload, pureCpu, nglCount) {
+function calcNgl(model, pureCpu, nglCount) {
   if (pureCpu) return 0
-  if (cpuOffload && model.type === 'moe') return 'all'
-  if (cpuOffload && model.type !== 'moe' && nglCount != null) {
-    return Math.max(0, Math.round(Number(nglCount) || 0))
-  }
-  return 'all'
+  if (nglCount == null) return 'auto'
+  const layers = Math.max(0, Math.round(Number(model?.layers) || 0))
+  return Math.min(layers, Math.max(0, Math.round(Number(nglCount) || 0)))
 }
 
 function safeLocalModelName(model) {
@@ -310,7 +342,7 @@ function genLlamacpp(config) {
     `--model ${modelPath}`,
     `--ctx-size ${totalContext}`,
     `--parallel ${parallel}`,
-    `--n-gpu-layers ${calcNgl(model, cpuOffload, pureCpu, nglCount)}`,
+    `--n-gpu-layers ${calcNgl(model, pureCpu, nglCount)}`,
   ]
   const notes = [
     `# Note: --ctx-size is total KV capacity (${perSlotContext} tokens × ${parallel} parallel slots).`,
@@ -327,7 +359,19 @@ function genLlamacpp(config) {
     // The estimator models simultaneous tensor sharding, so use llama.cpp's
     // row-parallel split instead of its pipelined layer split.
     parts.push('--split-mode row')
-    notes.push('# Note: row-parallel splitting matches the estimator; use --tensor-split to override automatic GPU proportions.')
+    if (config.gpu?.mixedGpu) {
+      const deviceIds = mixedNvidiaDeviceIds(config)
+      if (deviceIds) parts.push(`--device ${deviceIds.map(id => `CUDA${id}`).join(',')}`)
+      parts.push(
+        `--tensor-split ${Array.from(
+          { length: positiveInteger(gpuCount) },
+          () => 1,
+        ).join(',')}`,
+      )
+      notes.push('# Note: equal tensor splits match the estimator and conservatively use the smallest mixed GPU as the capacity limit.')
+    } else {
+      notes.push('# Note: row-parallel splitting matches the estimator; use --tensor-split to override automatic GPU proportions.')
+    }
   }
 
   const cacheType = {
@@ -396,12 +440,14 @@ function genTrtllm(hfModel, config) {
     gpuMemoryUtilization,
   } = config
   const parts = [
-    `trtllm-serve ${hfModel}`,
+    `${cudaCommandPrefix(config)}trtllm-serve ${hfModel}`,
     `--max_batch_size ${positiveInteger(batch)}`,
     `--max_seq_len ${positiveInteger(ctx, 8192)}`,
     `--tp_size ${positiveInteger(gpuCount)}`,
   ]
   const notes = []
+  const deviceNote = mixedGpuNote(config)
+  if (deviceNote) notes.push(deviceNote)
 
   if (positiveInteger(ppCount) > 1) parts.push(`--pp_size ${positiveInteger(ppCount)}`)
   if (kvCacheQuant.id === 'fp8') parts.push('--kv_cache_dtype fp8')

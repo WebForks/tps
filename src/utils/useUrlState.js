@@ -307,7 +307,10 @@ export function watchUrlState({
     ([slots, ic, m, q, c, b, pl, ol, fw, fa, kv, pc, co, coMode, pb, pw, pcpu, cmb, ctf, gmu, sr, sv, sd, ar, dl, dmp, pp, ep, img, ngl]) => {
       const normalizedRam = normalizeRamCapacity(sr)
       const hasSharedMemoryGpu = slots?.some(slot => slot.gpu?.sharedMemory)
-      const usesCpuMemoryBandwidth = pcpu || co || hasSharedMemoryGpu
+      const usesCpuMemoryBandwidth = pcpu
+        || co
+        || hasSharedMemoryGpu
+        || (fw?.id === 'llamacpp' && !pcpu)
       const draftCap = Math.max(
         0.5,
         Math.min(32, Number(m?.active_params ?? m?.params ?? 8) * 0.5),
@@ -384,7 +387,7 @@ export function watchUrlState({
         pp:    pp != null && pp !== 1 ? pp : null,
         ep:    ep != null && ep !== 1 ? ep : null,
         img:   img != null && img !== 0 ? img : null,
-        ngl:   (co && fw?.id === 'llamacpp' && ngl != null) ? ngl : null,
+        ngl:   (fw?.id === 'llamacpp' && !pcpu && ngl != null) ? ngl : null,
       })
     },
     { immediate: true, deep: true }

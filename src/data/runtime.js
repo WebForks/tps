@@ -199,9 +199,15 @@ export function resolveCpuMemBwOption(id) {
 // 台式机主板常见：x8（多卡），x16（主槽单卡）；服务器/HEDT 可跑 x16
 export const PCIE_WIDTH_OPTIONS = [
   { id: 'x4',  label: 'x4',  ratio: 0.25 },
-  { id: 'x8',  label: 'x8',  ratio: 0.5  },  // 台式机多卡默认（如 RTX 4060）
+  { id: 'x8',  label: 'x8',  ratio: 0.5  },
   { id: 'x16', label: 'x16', ratio: 1.0  },
 ]
+
+export function getDefaultPcieWidth(gpuCount = 1) {
+  const preferredId = Number(gpuCount) > 1 ? 'x8' : 'x16'
+  return PCIE_WIDTH_OPTIONS.find(option => option.id === preferredId)
+    ?? PCIE_WIDTH_OPTIONS[0]
+}
 
 // 系统内存（RAM）容量预设，用于 CPU Offload / 纯 CPU 模式下的 OOM 校验
 export const RAM_CAPACITY_OPTIONS = [16, 32, 48, 64, 96, 128, 192, 256, 384, 512]

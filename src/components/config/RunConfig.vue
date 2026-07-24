@@ -45,6 +45,7 @@ const props = defineProps({
   gpu: { type: Object, default: null },
   gpuCount: { type: Number, default: 1 },
   gpuSharedMemory: { type: Boolean, default: false },
+  autoNgl: { type: Number, default: null },
 })
 
 const quant = defineModel('quant', { required: true })
@@ -158,7 +159,7 @@ const isLlamaCppFramework = computed(() => props.framework?.id === 'llamacpp')
 const offloadSupported = computed(() =>
   !props.gpuSharedMemory
   && supportsRuntimeFeature(props.framework, 'cpuOffload')
-  && (props.model?.type === 'moe' || isLlamaCppFramework.value)
+  && props.model?.type === 'moe'
 )
 const automaticOffloadSupported = computed(() =>
   offloadSupported.value && props.model?.type === 'moe'
@@ -168,17 +169,26 @@ const pureCpuSupported = computed(() =>
   &&
   supportsRuntimeFeature(props.framework, 'pureCpu')
 )
-const effectiveNgl = computed(() => nglCount.value ?? Math.floor((props.model?.layers ?? 32) / 2))
+const effectiveNgl = computed(() =>
+  nglCount.value
+  ?? props.autoNgl
+  ?? props.model?.layers
+  ?? 0
+)
+const isAutomaticNgl = computed(() => nglCount.value == null)
+const llamaCppUsesCpuLayers = computed(() =>
+  !pureCpu.value
+  && isLlamaCppFramework.value
+  && effectiveNgl.value < (props.model?.layers ?? 0)
+)
 const usesCpuMemoryBandwidth = computed(() =>
-  pureCpu.value || cpuOffload.value || Boolean(props.gpu?.sharedMemory)
+  pureCpu.value
+  || cpuOffload.value
+  || llamaCppUsesCpuLayers.value
+  || Boolean(props.gpu?.sharedMemory)
 )
 const usesCpuCompute = computed(() =>
-  pureCpu.value
-  || (
-    cpuOffload.value
-    && isLlamaCppFramework.value
-    && props.model?.type !== 'moe'
-  )
+  pureCpu.value || llamaCppUsesCpuLayers.value
 )
 
 const activeCpuMemGeneration = computed(() => {
@@ -366,10 +376,10 @@ watch(pureCpuSupported, supported => {
   if (!supported && pureCpu.value) pureCpu.value = false
 }, { immediate: true })
 
-// MoE + llamacpp + offload 时清除 nglCount（不需要 NGL 滑块）
-watch([cpuOffload, () => props.framework, () => props.model], ([co, fw, m]) => {
-  const isLlamaCppHybridDense = co && fw?.id === 'llamacpp' && m?.type !== 'moe'
-  if (!isLlamaCppHybridDense) nglCount.value = null
+// A manual NGL only belongs to llama.cpp. Returning to llama.cpp starts from
+// its VRAM-derived automatic placement instead of reviving a stale layer count.
+watch([() => props.framework?.id, pureCpu], ([frameworkId, cpuOnly]) => {
+  if (frameworkId !== 'llamacpp' || cpuOnly) nglCount.value = null
 })
 
 // These modes are alternatives, including when state is restored externally
@@ -673,11 +683,14 @@ const ctxOptions = computed(() => {
           >{{ t('run.compute_mode_cpu') }}</button>
         </div>
 
-        <!-- llama.cpp + dense：NGL 分层 -->
-        <template v-if="cpuOffload && !pureCpu && isLlamaCppFramework && props.model?.type !== 'moe'">
+        <!-- llama.cpp NGL layer placement is independent of MoE expert offload. -->
+        <template v-if="!pureCpu && isLlamaCppFramework">
           <label class="flex items-center justify-between text-xs text-gray-500 mt-2 mb-1.5">
             <span class="flex items-center gap-1">{{ t('run.ngl_count') }}<TipIcon :text="t('run.ngl_count_tip')" /></span>
-            <span class="text-emerald-700 font-medium">{{ effectiveNgl }} / {{ props.model?.layers ?? '?' }} {{ t('run.layers') }}</span>
+            <span class="text-emerald-700 font-medium">
+              {{ effectiveNgl }} / {{ props.model?.layers ?? '?' }} {{ t('run.layers') }}
+              · {{ isAutomaticNgl ? t('run.ngl_auto') : t('run.ngl_manual') }}
+            </span>
           </label>
           <input
             type="range"
@@ -688,13 +701,19 @@ const ctxOptions = computed(() => {
             step="1"
             class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
           />
+          <button
+            v-if="!isAutomaticNgl"
+            type="button"
+            @click="nglCount = null"
+            class="mt-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:border-gray-300 transition-colors"
+          >{{ t('run.ngl_use_auto') }}</button>
           <p class="mt-1.5 text-xs text-slate-500 bg-slate-50 rounded px-2 py-1.5 border border-slate-200">
             ℹ️ {{ t('run.llamacpp_hybrid_note') }}
           </p>
         </template>
 
-        <!-- llamacpp + MoE 或非 llamacpp：expert PCIe offload -->
-        <template v-if="cpuOffload && !pureCpu && (!isLlamaCppFramework || props.model?.type === 'moe')">
+        <!-- MoE expert PCIe offload is separate from llama.cpp layer placement. -->
+        <template v-if="cpuOffload && !pureCpu && props.model?.type === 'moe'">
           <label class="flex items-center gap-1 text-xs text-gray-500 mt-2 mb-1.5">{{ t('run.pcie_bw') }}<TipIcon :text="t('run.pcie_bw_tip')" /></label>
           <div class="flex gap-1.5 flex-wrap">
             <button

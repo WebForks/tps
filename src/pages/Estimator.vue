@@ -16,6 +16,7 @@ import {
   KV_CACHE_MAP,
   PCIE_BW_OPTIONS,
   PCIE_WIDTH_OPTIONS,
+  getDefaultPcieWidth,
   normalizeRamCapacity,
   resolveCpuMemBwOption,
 } from '../data/runtime.js'
@@ -69,7 +70,10 @@ const pureCpu        = ref(_url.pureCpu      ?? false)
 const cpuOffloadMode = ref(pureCpu.value ? 'off' : (_url.cpuOffloadMode ?? 'auto'))
 const cpuOffload     = ref(false)
 const pcieBw         = ref(_url.pcieBw       ?? PCIE_BW_OPTIONS[1])
-const pcieWidth      = ref(_url.pcieWidth     ?? PCIE_WIDTH_OPTIONS[1])  // 默认 x8
+let automaticPcieWidth = getDefaultPcieWidth(gpuCount.value)
+let usesAutomaticPcieWidth = !_url.pcieWidth
+let settingAutomaticPcieWidth = false
+const pcieWidth      = ref(_url.pcieWidth     ?? automaticPcieWidth)
 const cpuMemBw       = ref(_url.cpuMemBw     ?? resolveCpuMemBwOption('ddr5_4800'))
 const cpuTflops      = ref(_url.cpuTflops     ?? null)
 const sysRam         = ref(normalizeRamCapacity(_url.sysRam, 64))
@@ -101,6 +105,22 @@ const ppCount        = ref(_url.ppCount        ?? 1)
 const epCount        = ref(_url.epCount        ?? 1)
 const imageCount     = ref(_url.imageCount     ?? 0)
 const nglCount       = ref(_url.nglCount       ?? null)
+
+watch(pcieWidth, selected => {
+  if (!settingAutomaticPcieWidth && selected?.id !== automaticPcieWidth?.id) {
+    usesAutomaticPcieWidth = false
+  }
+})
+watch(gpuCount, count => {
+  const nextAutomaticWidth = getDefaultPcieWidth(count)
+  automaticPcieWidth = nextAutomaticWidth
+  if (!usesAutomaticPcieWidth || pcieWidth.value?.id === nextAutomaticWidth?.id) return
+  settingAutomaticPcieWidth = true
+  pcieWidth.value = nextAutomaticWidth
+  queueMicrotask(() => {
+    settingAutomaticPcieWidth = false
+  })
+})
 
 // 双列对比模式
 const pinnedResult = ref(null)
@@ -203,7 +223,7 @@ watch(
       && !selectedGpu.unifiedMemory
       && !selectedGpu.sharedMemory
       && supportsRuntimeFeature(selectedFramework, 'cpuOffload')
-      && (selectedModel?.type === 'moe' || selectedFramework?.id === 'llamacpp')
+      && selectedModel?.type === 'moe'
     )
     if (!supported || mode === 'off') {
       cpuOffload.value = false
@@ -263,9 +283,9 @@ watch([() => gpuSlots.value[0]?.gpu, pureCpu], ([g, cpuOnly]) => {
   }
 }, { immediate: true })
 
-// llama.cpp hybrid 模式失效时重置 nglCount
-watch([cpuOffload, framework], ([co, fw]) => {
-  if (!(co && fw?.id === 'llamacpp')) nglCount.value = null
+// Manual NGL is scoped to llama.cpp and is reset when leaving that runtime.
+watch([framework, pureCpu], ([fw, cpuOnly]) => {
+  if (fw?.id !== 'llamacpp' || cpuOnly) nglCount.value = null
 })
 
 watchUrlState({ gpuSlots, interconnect, model, quant, ctx, batch,
@@ -524,6 +544,7 @@ const batchSweepData = computed(() => {
           v-model:gpuMemoryUtilization="gpuMemoryUtilization"
           v-model:cpuTflops="cpuTflops" v-model:cpuOffloadMode="cpuOffloadMode"
           :model="model" :framework="framework" :gpu="effectiveGpu" :gpuCount="gpuCount"
+          :auto-ngl="result?.autoNgl"
           :gpu-shared-memory="Boolean(effectiveGpu?.unifiedMemory || effectiveGpu?.sharedMemory)"
           v-model:speculativeDecoding="speculativeDecoding"
           v-model:acceptanceRate="acceptanceRate" v-model:draftLen="draftLen"

@@ -253,8 +253,11 @@ export default {
     copy_cmd_docs: '官方文档',
     launch_command_unavailable: '无法生成启动命令：{reason}',
     ngl_count: 'GPU 层数 (--n-gpu-layers)',
-    ngl_count_tip: '分配到 GPU 的 Transformer 层数，对应 llama.cpp 的 --n-gpu-layers。层数越多速度越快，但需要更多显存；剩余层由 CPU 处理，速度受 DDR 内存带宽限制。',
-    llamacpp_hybrid_note: 'Prefill 速度在混合模式下仅供参考，实际受 CPU 核心数和 AVX 指令集支持情况影响。',
+    ngl_count_tip: 'llama.cpp 的分层放置设置。自动模式根据可用显存推导可容纳层数；拖动滑块后改为手动覆盖。此设置与 MoE Expert CPU 卸载相互独立。',
+    ngl_auto: '自动（显存适配）',
+    ngl_manual: '手动',
+    ngl_use_auto: '使用自动分层',
+    llamacpp_hybrid_note: '未放入显存的层会在 CPU 上运行。混合模式 Prefill 速度为近似值，并受 CPU 核数、指令集和内存带宽影响。',
     layers: '层',
   },
   result: {

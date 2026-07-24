@@ -111,7 +111,7 @@ window.history.replaceState = (state, _title, url) => {
   capturedUrl = String(url)
 }
 const sharedGpu = GPU_LIST.find(gpu => gpu.sharedMemory && gpu.unitKind !== 'cpu')
-watchUrlState({
+const sharedState = {
   gpuSlots: ref([{ gpu: sharedGpu, count: 1 }]),
   interconnect: ref(INTERCONNECT_MAP.find(option => option.id === 'pcie4')),
   model: ref(ALL_MODELS.find(item => item.id === 'llama3_8b')),
@@ -142,7 +142,8 @@ watchUrlState({
   epCount: ref(1),
   imageCount: ref(0),
   nglCount: ref(null),
-})
+}
+watchUrlState(sharedState)
 const persistedShared = new URL(capturedUrl)
 assert(persistedShared.searchParams.get('cmb') === 'ddr4_3200', 'Shared GPU lost RAM type/speed')
 assert(persistedShared.searchParams.get('cmc') === '4', 'Shared GPU lost RAM channels')
@@ -153,6 +154,24 @@ assert(persistedShared.searchParams.get('gmu') === '0.8', 'GPU memory utilizatio
 assert(
   capturedHistoryState === window.history.state,
   'URL synchronization overwrote Vue Router history metadata',
+)
+
+capturedUrl = null
+watchUrlState({
+  ...sharedState,
+  gpuSlots: ref([{
+    gpu: GPU_LIST.find(gpu => gpu.id === 'rtx4090'),
+    count: 1,
+  }]),
+  cpuOffload: ref(false),
+  cpuOffloadMode: ref('off'),
+  nglCount: ref(5),
+})
+const persistedManualNgl = new URL(capturedUrl)
+assert(
+  persistedManualNgl.searchParams.get('ngl') === '5'
+    && persistedManualNgl.searchParams.get('co') === 'off',
+  'Manual llama.cpp NGL was still coupled to the MoE CPU-offload state',
 )
 
 const resultPanelSource = readFileSync(

@@ -253,8 +253,11 @@ export default {
     copy_cmd_docs: 'Official docs',
     launch_command_unavailable: 'Launch command unavailable: {reason}',
     ngl_count: 'GPU Layers (--n-gpu-layers)',
-    ngl_count_tip: 'Number of Transformer layers offloaded to GPU, corresponding to llama.cpp --n-gpu-layers. More layers = faster but requires more VRAM. Remaining layers run on CPU, bottlenecked by DDR memory bandwidth.',
-    llamacpp_hybrid_note: 'Prefill speed in hybrid mode is approximate — actual performance depends on CPU core count and AVX instruction support.',
+    ngl_count_tip: 'llama.cpp layer placement. Auto derives a fitting layer count from usable VRAM; a slider change becomes a manual override. This is independent of MoE CPU expert offload.',
+    ngl_auto: 'Auto (VRAM fit)',
+    ngl_manual: 'Manual',
+    ngl_use_auto: 'Use automatic placement',
+    llamacpp_hybrid_note: 'Layers not placed in VRAM run on the CPU. Hybrid Prefill speed is approximate and depends on CPU cores, ISA support, and memory bandwidth.',
     layers: 'layers',
   },
   result: {

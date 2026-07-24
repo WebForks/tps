@@ -12,6 +12,7 @@ import {
   KV_CACHE_MAP,
   PCIE_BW_OPTIONS,
   PCIE_WIDTH_OPTIONS,
+  getDefaultPcieWidth,
   createCpuMemBwOption,
   normalizeCpuMemMeasuredBandwidth,
   normalizeCpuTflops,
@@ -181,7 +182,7 @@ const pcieBw = ref(
 const pcieWidth = ref(
   resolvedInitialUrl?.pcieWidth
   ?? PCIE_WIDTH_OPTIONS.find(option => option.id === _p.pw)
-  ?? PCIE_WIDTH_OPTIONS[1]
+  ?? getDefaultPcieWidth(currentGpuCount.value)
 )
 const baseCpuMemBw = resolvedInitialUrl?.cpuMemBw
   ?? resolveCpuMemBwOption(_p.cmb)

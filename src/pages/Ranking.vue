@@ -12,6 +12,7 @@ import { fmtParams, fmtGB, fmtToks, fmtMs, fmtCtx, isNew } from '../utils/format
 import {
   PCIE_BW_OPTIONS,
   PCIE_WIDTH_OPTIONS,
+  getDefaultPcieWidth,
   CPU_MEM_CHANNEL_OPTIONS,
   CPU_MEM_GENERATIONS,
   CPU_MEM_TRANSFER_RATE_PRESETS,
@@ -82,7 +83,10 @@ const gpuCount    = computed(() => gpuSlots.value.reduce((s, g) => s + g.count, 
 const sharedVram  = ref(boundedInt(_p.sv, 16, 1, 512))
 
 const pcieBw = ref(PCIE_BW_OPTIONS.find(option => option.id === _p.pcie) ?? PCIE_BW_OPTIONS[1])
-const pcieWidth = ref(PCIE_WIDTH_OPTIONS.find(option => option.id === _p.pw) ?? PCIE_WIDTH_OPTIONS[1])
+const pcieWidth = ref(
+  PCIE_WIDTH_OPTIONS.find(option => option.id === _p.pw)
+  ?? getDefaultPcieWidth(gpuCount.value),
+)
 const initialCpuMemBw = resolveCpuMemBwOption(_p.cmb) ?? resolveCpuMemBwOption('ddr5_4800')
 const cpuMemBw = ref(createCpuMemBwOption(
   initialCpuMemBw.generation,

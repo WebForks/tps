@@ -500,13 +500,6 @@ export function getRuntimeCompatibility({
           'Mixed GPU estimation requires a known, compatible architecture family on every card.',
         ),
       )
-    } else if (forCommand) {
-      reasons.push(
-        reason(
-          'mixed-gpu-command-unsupported',
-          'Estimation is available for these mixed GPUs, but rank-to-device placement is deployment-specific, so a safe one-line launch command cannot be generated.',
-        ),
-      )
     }
   }
 

@@ -925,9 +925,9 @@ export function calcAll({
       && !gpu.invalidMemoryMix
     )
   const isEP = topology.epCount > 1
-  const isLlamaCppHybrid = effectiveCpuOffload && framework.id === 'llamacpp' && model.type !== 'moe'
+  const usesLlamaCppGpuLayers = !pureCpu && framework.id === 'llamacpp'
   const isMoeOffload = effectiveCpuOffload && model.type === 'moe'
-  const unsupportedDenseOffload = effectiveCpuOffload && model.type !== 'moe' && !isLlamaCppHybrid
+  const unsupportedDenseOffload = effectiveCpuOffload && model.type !== 'moe'
   const visionParameters = getVisionParameterInfo(model)
   const decoderModel = visionParameters.decoderParams === model.params
     ? model
@@ -1091,10 +1091,62 @@ export function calcAll({
     : 0
   const draftKvGB = targetKv.totalGB * draftScale
 
-  const effectiveNgl = isLlamaCppHybrid
-    ? clamp(Math.round(finiteNumber(nglCount, Math.floor(modelLayers / 2))), 0, modelLayers)
-    : modelLayers
-  const gpuLayerRatio = isLlamaCppHybrid ? effectiveNgl / modelLayers : pureCpu ? 0 : 1
+  const activationGB = getActivationGB({
+    model,
+    batch: safeBatch,
+    queryTokens: effectivePromptLen,
+    attendedTokens: promptTokensWithVision,
+    flashAttention,
+    totalHeads,
+    layerBreakdown,
+  }) * (1 + draftScale)
+
+  // llama.cpp's automatic NGL is a fit decision, not "half the layers".
+  // Estimate it against the limiting per-card VRAM so mixed GPU sets retain
+  // the same conservative equal-shard assumption used by the main calculator.
+  const autoNgl = usesLlamaCppGpuLayers
+    ? (() => {
+        const perCardVramBudget = positiveNumber(gpu.vram, 0.001)
+          * clamp(finiteNumber(gpu.usableRatio, 1), 0.01, 1)
+        const tp = Math.max(1, topology.tpCount)
+        const kvShardCount = Math.min(
+          tp,
+          Math.max(1, positiveInteger(model.kv_heads ?? model.query_heads ?? totalHeads)),
+        )
+        const fullGpuTargetWeightGB = isMoeOffload
+          ? (moe.nonExpertParams + auxiliaryResidentParams) * quantBytes
+          : targetWeightGB
+        for (let layers = modelLayers; layers >= 0; layers -= 1) {
+          const ratio = layers / modelLayers
+          const perCardWeight = (
+            fullGpuTargetWeightGB * ratio + draftWeightGB
+          ) / tp
+          const perCardKv = (
+            targetKv.totalGB * ratio + draftKvGB
+          ) / kvShardCount
+          const perCardActivation = activationGB / tp
+          const perCardRuntime = Math.max(0.75, Math.min(perCardWeight * 0.03, 4))
+          if (
+            perCardWeight + perCardKv + perCardActivation + perCardRuntime
+            <= perCardVramBudget
+          ) {
+            return layers
+          }
+        }
+        return 0
+      })()
+    : null
+  const effectiveNgl = pureCpu
+    ? 0
+    : usesLlamaCppGpuLayers
+      ? clamp(
+          nglCount == null ? autoNgl : Math.round(finiteNumber(nglCount, autoNgl)),
+          0,
+          modelLayers,
+        )
+      : modelLayers
+  const gpuLayerRatio = pureCpu ? 0 : effectiveNgl / modelLayers
+  const isLlamaCppHybrid = usesLlamaCppGpuLayers && effectiveNgl < modelLayers
   const gpuComputeRequired = !pureCpu && (!isLlamaCppHybrid || gpuLayerRatio > 0)
   const decodeTflopsPerCard = getDecodeTflops(gpu, quant)
   const prefillTflopsPerCard = getPrefillTflops(gpu, quant)
@@ -1121,13 +1173,11 @@ export function calcAll({
   const gpuDecoderWeightGB = pureCpu
     ? 0
     : isMoeOffload
-      ? moe.nonExpertParams * quantBytes
+      ? moe.nonExpertParams * quantBytes * gpuLayerRatio
       : decoderWeightGB * gpuLayerRatio
   const gpuAuxiliaryWeightGB = pureCpu
     ? 0
-    : isMoeOffload
-      ? auxiliaryResidentWeightGB
-      : auxiliaryResidentWeightGB * gpuLayerRatio
+    : auxiliaryResidentWeightGB * gpuLayerRatio
   const gpuTargetWeightGB = gpuDecoderWeightGB + gpuAuxiliaryWeightGB
   const gpuTargetGlobalSequenceKvGB = pureCpu
     ? 0
@@ -1152,16 +1202,6 @@ export function calcAll({
   const gpuDraftKvGB = gpuDraftSequenceKvGB + gpuDraftRecurrentKvGB
   const weightGB = gpuTargetWeightGB + gpuDraftWeightGB
   const kvGB = gpuTargetKvGB + gpuDraftKvGB
-
-  const activationGB = getActivationGB({
-    model,
-    batch: safeBatch,
-    queryTokens: effectivePromptLen,
-    attendedTokens: promptTokensWithVision,
-    flashAttention,
-    totalHeads,
-    layerBreakdown,
-  }) * (1 + draftScale)
 
   const mlaCacheIsReplicated = finiteNumber(model.kv_lora_rank, NaN) > 0
   const globalSequenceKvShardLimit = Math.max(
@@ -1272,11 +1312,9 @@ export function calcAll({
 
   const cpuWeightGB = pureCpu
     ? targetWeightGB + draftWeightGB
-    : isLlamaCppHybrid
-      ? targetWeightGB * (1 - gpuLayerRatio)
-      : isMoeOffload
-        ? Math.max(0, targetWeightGB - gpuTargetWeightGB)
-        : 0
+    : isLlamaCppHybrid || isMoeOffload
+      ? Math.max(0, targetWeightGB - gpuTargetWeightGB)
+      : 0
   const cpuKvGB = pureCpu
     ? targetKv.totalGB + draftKvGB
     : isLlamaCppHybrid
@@ -1539,6 +1577,35 @@ export function calcAll({
       return (weightReadGB + logicalTrafficGB) / (cpuBw * cpuFactor)
     }
     if (isLlamaCppHybrid) {
+      if (isMoeOffload) {
+        const touchedParams = getMoeTouchedParams(
+          decoderModel,
+          moe,
+          safeBatch * verificationTokens,
+        )
+        const expertParams = Math.max(0, touchedParams - moe.nonExpertParams)
+        const expertSeconds = expertParams
+          * quantBytes
+          * selectedStageFactor
+          * gpuLayerRatio
+          / offloadTransferBw
+        const gpuSeconds = gpuLayerRatio > 0
+          ? (
+              moe.nonExpertParams
+              * quantBytes
+              * selectedStageFactor
+              * gpuLayerRatio
+              + aggregateGpuTrafficGB * gpuLayerRatio
+            ) / (totalGpuBw * factor)
+          : 0
+        const cpuSeconds = (1 - gpuLayerRatio) > 0
+          ? (
+              weightReadGB * (1 - gpuLayerRatio)
+              + logicalTrafficGB * (1 - gpuLayerRatio)
+            ) / (cpuBw * cpuFactor)
+          : 0
+        return expertSeconds + gpuSeconds + cpuSeconds
+      }
       const gpuSeconds = gpuLayerRatio > 0
         ? (
             weightReadGB * gpuLayerRatio
@@ -2037,13 +2104,21 @@ export function calcAll({
       memorySeconds = (prefillWeightReadGB + logicalPrefillKvTrafficGB)
         / (cpuBw * decodeRange.mid)
     } else if (isLlamaCppHybrid) {
+      const gpuExpertMemorySeconds = isMoeOffload
+        ? prefillExpertWeightReadGB
+          * prefillSelectedStageFactor
+          * gpuLayerRatio
+          / offloadTransferBw
+        : 0
       const gpuMemoryGB = (
-        prefillWeightReadGB + pipelineAggregateGpuPrefillKvTrafficGB
+        (isMoeOffload ? prefillDenseWeightReadGB : prefillWeightReadGB)
+          + pipelineAggregateGpuPrefillKvTrafficGB
       ) * gpuLayerRatio
       const cpuMemoryGB = (
         prefillWeightReadGB + logicalPrefillKvTrafficGB
       ) * (1 - gpuLayerRatio)
-      memorySeconds = gpuMemoryGB / (totalGpuBw * decodeRange.mid)
+      memorySeconds = gpuExpertMemorySeconds
+        + gpuMemoryGB / (totalGpuBw * decodeRange.mid)
         + cpuMemoryGB / (cpuBw * cpuDecodeRange.mid)
     } else if (isMoeOffload) {
       memorySeconds = prefillExpertWeightReadGB
@@ -2339,7 +2414,9 @@ export function calcAll({
     offloadTransferBw: isMoeOffload ? offloadTransferBw : null,
     pcieBwLabel: isMoeOffload && pcieBw ? pcieBw.label : null,
     pcieWidthLabel: isMoeOffload && pcieWidth ? pcieWidth.label : null,
-    nglCount: isLlamaCppHybrid ? effectiveNgl : null,
+    autoNgl,
+    effectiveNgl: usesLlamaCppGpuLayers || pureCpu ? effectiveNgl : null,
+    nglCount: usesLlamaCppGpuLayers || pureCpu ? effectiveNgl : null,
     gpuLayerRatio,
     speculativeDecoding: Boolean(speculativeDecoding),
     speculativeSpeedup,
@@ -2624,6 +2701,12 @@ export function aggregateGpuSlots(slots) {
     mixedGpuEstimateSupported,
     componentVendors,
     componentArchitectures,
+    componentSlots: slots.map(slot => ({
+      id: slot.gpu.id,
+      name: slot.gpu.name,
+      count: positiveInteger(slot.count),
+      vram: positiveNumber(slot.gpu.vram, 0.001),
+    })),
     modified: expanded.some(item => item?.modified),
     official: expanded.every(item => item?.official !== false),
     computeEstimate: expanded.some(item => item?.computeEstimate),
